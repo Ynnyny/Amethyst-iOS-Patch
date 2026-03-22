@@ -41,6 +41,7 @@ jobs:
       - name: Build for ${{ matrix.platform_name }}
         run: |
           export PATH=/opt/homebrew/bin:$PATH
+          export BOOTJDK="$JAVA_HOME/bin"
           export SLIMMED=1
           if [ "${{ matrix.platform_name }}" == "ios" ]; then
             # Build ipa and tipa for iOS
