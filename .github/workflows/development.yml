@@ -27,6 +27,11 @@ jobs:
       - name: Checkout repository submodules
         run: git submodule update --init --recursive
 
+      - name: Install dependencies
+        run: |
+          brew install make ldid wget
+          echo "/opt/homebrew/opt/make/libexec/gnubin" >> $GITHUB_PATH
+
       - name: Build for ${{ matrix.platform_name }}
         run: |
           export PATH=/opt/homebrew/bin:$PATH
