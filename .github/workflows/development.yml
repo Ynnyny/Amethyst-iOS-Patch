@@ -38,6 +38,9 @@ jobs:
           brew install make ldid wget
           echo "/opt/homebrew/opt/make/libexec/gnubin" >> $GITHUB_PATH
 
+      - name: Restore external dependencies & patch
+        run: bash scripts/ci/restore_external_dependencies.sh
+
       - name: Build for ${{ matrix.platform_name }}
         run: |
           export PATH=/opt/homebrew/bin:$PATH
