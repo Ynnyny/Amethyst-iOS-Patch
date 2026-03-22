@@ -1,6 +1,7 @@
 #import "PickTextField.h"
 #import "UIKit+hook.h"
 #import "utils.h"
+#include <dlfcn.h>
 
 @interface PickViewController : UIViewController
 @property(nonatomic, assign) UITextField *textField;
@@ -52,7 +53,12 @@
 
 - (BOOL)becomeFirstResponder {
     // iOS 26 uses popover aswell
-    BOOL hasLiquidGlass = _UISolariumEnabled && _UISolariumEnabled();
+    static BOOL (*_UISolariumEnabledFunc)(void) = NULL;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        _UISolariumEnabledFunc = dlsym(RTLD_DEFAULT, "_UISolariumEnabled");
+    });
+    BOOL hasLiquidGlass = _UISolariumEnabledFunc && _UISolariumEnabledFunc();
     if (!hasLiquidGlass && !NSProcessInfo.processInfo.isMacCatalystApp) {
         return [super becomeFirstResponder];
     }
