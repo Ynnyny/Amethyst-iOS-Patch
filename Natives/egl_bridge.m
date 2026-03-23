@@ -94,7 +94,11 @@ int pojavInitOpenGL() {
     BOOL useMetalCraft = [requestedRenderer isEqualToString:@ RENDERER_NAME_METALCRAFT];
     BOOL isAuto = [renderer isEqualToString:@"auto"];
     if (useMetalCraft) {
-        renderer = @ RENDERER_NAME_METALCRAFT_BACKEND;
+        if (renderer.length == 0 ||
+            [renderer isEqualToString:@"auto"] ||
+            [renderer isEqualToString:requestedRenderer]) {
+            renderer = @ RENDERER_NAME_METALCRAFT_BACKEND;
+        }
         setenv("POJAV_RENDERER_BACKEND", renderer.UTF8String, 1);
         set_gl_bridge_tbl();
     } else if (isAuto || [renderer isEqualToString:@ RENDERER_NAME_GL4ES]) {

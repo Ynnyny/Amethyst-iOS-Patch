@@ -177,7 +177,15 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
         NSString *backendRenderer = requestedRenderer;
         BOOL useMetalCraft = [requestedRenderer isEqualToString:@ RENDERER_NAME_METALCRAFT];
         if (useMetalCraft) {
-            backendRenderer = @ RENDERER_NAME_METALCRAFT_BACKEND;
+            const char *existingBackendRenderer = getenv("POJAV_RENDERER_BACKEND");
+            if (existingBackendRenderer != NULL &&
+                existingBackendRenderer[0] != '\0' &&
+                strcmp(existingBackendRenderer, "auto") != 0 &&
+                strcmp(existingBackendRenderer, requestedRenderer.UTF8String) != 0) {
+                backendRenderer = @(existingBackendRenderer);
+            } else {
+                backendRenderer = @ RENDERER_NAME_METALCRAFT_BACKEND;
+            }
             setenv("POJAV_METALCRAFT_ENABLED", "1", 1);
         } else {
             unsetenv("POJAV_METALCRAFT_ENABLED");
