@@ -219,3 +219,7 @@ set_target_properties(AngelAuraAmethyst PROPERTIES
 if (EXISTS "${CMAKE_CURRENT_LIST_DIR}/renderer/CMakeLists.txt")
   add_subdirectory(renderer)
 endif()
+
+if (TARGET MetalCraft)
+  add_dependencies(AngelAuraAmethyst MetalCraft)
+endif()

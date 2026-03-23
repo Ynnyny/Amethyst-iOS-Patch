@@ -23,7 +23,9 @@ public:
     virtual void endFrame() = 0;
     virtual void draw(const DrawCallInfo& info) = 0;
     virtual void drawIndexed(const DrawCallInfo& info) = 0;
+    virtual void drawIndirect(const IndirectDrawBatch& batch) = 0;
     virtual void submit() = 0;
+    virtual bool supportsIndirectDraw() const noexcept = 0;
     virtual std::size_t ringBufferCapacity() const noexcept = 0;
     virtual std::size_t drawCallCount() const noexcept = 0;
 };

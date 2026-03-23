@@ -170,9 +170,22 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
         }
 
         // Setup POJAV_RENDERER
-        NSString *renderer = [PLProfiles resolveKeyForCurrentProfile:@"renderer"];
-        NSLog(@"[JavaLauncher] RENDERER is set to %@\n", renderer);
-        setenv("POJAV_RENDERER", renderer.UTF8String, 1);
+        NSString *requestedRenderer = [PLProfiles resolveKeyForCurrentProfile:@"renderer"];
+        if (requestedRenderer.length == 0) {
+            requestedRenderer = @"auto";
+        }
+        NSString *backendRenderer = requestedRenderer;
+        BOOL useMetalCraft = [requestedRenderer isEqualToString:@ RENDERER_NAME_METALCRAFT];
+        if (useMetalCraft) {
+            backendRenderer = @ RENDERER_NAME_METALCRAFT_BACKEND;
+            setenv("POJAV_METALCRAFT_ENABLED", "1", 1);
+        } else {
+            unsetenv("POJAV_METALCRAFT_ENABLED");
+        }
+        NSLog(@"[JavaLauncher] RENDERER is set to %@ (backend: %@)\n", requestedRenderer,
+              backendRenderer);
+        setenv("POJAV_RENDERER", requestedRenderer.UTF8String, 1);
+        setenv("POJAV_RENDERER_BACKEND", backendRenderer.UTF8String, 1);
         // Setup gameDir
         gameDir = [NSString stringWithFormat:@"%s/instances/%@/%@",
             getenv("POJAV_HOME"), getPrefObject(@"general.game_directory"),
@@ -245,7 +258,10 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     margv[++margc] = "-Dlog4j2.formatMsgNoLookups=true";
 
     // Preset OpenGL libname
-    const char *glLibName = getenv("POJAV_RENDERER");
+    const char *glLibName = getenv("POJAV_RENDERER_BACKEND");
+    if (!glLibName) {
+        glLibName = getenv("POJAV_RENDERER");
+    }
     if (glLibName) {
         if (!strcmp(glLibName, "auto")) {
             // workaround only applies to 1.20.2+
@@ -253,6 +269,22 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
         }
         margv[++margc] = [NSString stringWithFormat:@"-Dorg.lwjgl.opengl.libname=%s", glLibName].UTF8String;
     }
+    const char *requestedRenderer = getenv("POJAV_RENDERER");
+    if (requestedRenderer) {
+        margv[++margc] =
+            [NSString stringWithFormat:@"-Dpojav.renderer.requested=%s", requestedRenderer]
+                .UTF8String;
+    }
+    const char *backendRenderer = getenv("POJAV_RENDERER_BACKEND");
+    if (backendRenderer) {
+        margv[++margc] =
+            [NSString stringWithFormat:@"-Dpojav.renderer.backend=%s", backendRenderer]
+                .UTF8String;
+    }
+    margv[++margc] = [NSString stringWithFormat:@"-Dpojav.renderer.metalcraft=%s",
+                                                getenv("POJAV_METALCRAFT_ENABLED") ? "true"
+                                                                                   : "false"]
+                          .UTF8String;
 
     NSString *librariesPath = [NSString stringWithFormat:@"%@/libs", NSBundle.mainBundle.bundlePath];
     margv[++margc] = [NSString stringWithFormat:@"-javaagent:%@/patchjna_agent.jar=", librariesPath].UTF8String;

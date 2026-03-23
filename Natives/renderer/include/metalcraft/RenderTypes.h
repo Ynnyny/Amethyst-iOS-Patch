@@ -180,4 +180,18 @@ struct DrawCallInfo {
     std::size_t indexBufferOffset = 0;
 };
 
+struct IndirectDrawArraysCommand {
+    std::uint32_t vertexCount = 0;
+    std::uint32_t instanceCount = 1;
+    std::uint32_t firstVertex = 0;
+    std::uint32_t baseInstance = 0;
+};
+
+struct IndirectDrawBatch {
+    PrimitiveTopology topology = PrimitiveTopology::Triangles;
+    const IndirectDrawArraysCommand* commands = nullptr;
+    std::size_t commandCount = 0;
+    std::size_t stride = sizeof(IndirectDrawArraysCommand);
+};
+
 } // namespace metalcraft

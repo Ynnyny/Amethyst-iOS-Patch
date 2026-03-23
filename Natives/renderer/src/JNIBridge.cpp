@@ -1,11 +1,31 @@
 #include "metalcraft/JNIBridge.h"
 #include "metalcraft/IRenderDevice.h"
+#ifdef METALCRAFT_HAS_SHADER_TRANSLATOR
+#include "metalcraft/ShaderTranslator.h"
+#endif
 
+#include <cctype>
+#include <cstring>
 #include <mutex>
+#include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace metalcraft {
 namespace detail {
+
+struct RegisteredShader {
+#ifdef METALCRAFT_HAS_SHADER_TRANSLATOR
+    ShaderStage stage = ShaderStage::Vertex;
+    ShaderTranslationOptions options{};
+    ShaderTranslationResult translation{};
+#else
+    jint stage = 0;
+    bool flipVertexY = false;
+#endif
+    std::string glslSource{};
+    bool translated = false;
+};
 
 std::mutex& sharedMutex() {
     static std::mutex mutex;
@@ -73,6 +93,17 @@ PixelFormat toPixelFormat(jint value) noexcept {
     }
 }
 
+#ifdef METALCRAFT_HAS_SHADER_TRANSLATOR
+ShaderStage toShaderStage(jint value) noexcept {
+    switch (value) {
+        case static_cast<jint>(ShaderStage::Vertex): return ShaderStage::Vertex;
+        case static_cast<jint>(ShaderStage::Fragment): return ShaderStage::Fragment;
+        case static_cast<jint>(ShaderStage::Compute): return ShaderStage::Compute;
+        default: return ShaderStage::Vertex;
+    }
+}
+#endif
+
 StateTracker& trackerStorage() {
     static StateTracker tracker;
     return tracker;
@@ -88,9 +119,117 @@ std::unordered_map<std::uint64_t, TexturePtr>& textureMapStorage() {
     return textures;
 }
 
+std::unordered_map<std::uint64_t, RegisteredShader>& shaderMapStorage() {
+    static std::unordered_map<std::uint64_t, RegisteredShader> shaders;
+    return shaders;
+}
+
 std::uint64_t nextTextureId() {
     static std::uint64_t id = 1;
     return id++;
+}
+
+IRenderDevice* ensureDevice() {
+    auto& device = deviceStorage();
+    if (!device) {
+        device = metalcraft::CreateRenderDevice(4 * 1024 * 1024);
+    }
+    return device.get();
+}
+
+#ifdef METALCRAFT_HAS_SHADER_TRANSLATOR
+ShaderTranslator& shaderTranslator() {
+    static ShaderTranslator translator;
+    return translator;
+}
+
+std::string trim(std::string_view value) {
+    std::size_t begin = 0;
+    while (begin < value.size() &&
+           std::isspace(static_cast<unsigned char>(value[begin])) != 0) {
+        ++begin;
+    }
+
+    std::size_t end = value.size();
+    while (end > begin &&
+           std::isspace(static_cast<unsigned char>(value[end - 1])) != 0) {
+        --end;
+    }
+    return std::string(value.substr(begin, end - begin));
+}
+
+std::string inferStageFunctionName(const std::string& mslSource, ShaderStage stage,
+                                   const std::string& fallback) {
+    const char* keyword = stage == ShaderStage::Vertex ? "vertex" : "fragment";
+    std::size_t searchStart = 0;
+    while (true) {
+        const std::size_t keywordPos = mslSource.find(keyword, searchStart);
+        if (keywordPos == std::string::npos) {
+            return fallback;
+        }
+
+        const std::size_t parenPos = mslSource.find('(', keywordPos);
+        if (parenPos == std::string::npos) {
+            return fallback;
+        }
+
+        const std::size_t signatureStart = mslSource.rfind('\n', parenPos);
+        const std::size_t lineStart =
+            signatureStart == std::string::npos ? 0 : signatureStart + 1;
+        const std::string signature = trim(
+            std::string_view(mslSource).substr(lineStart, parenPos - lineStart));
+        const std::size_t lastSpace = signature.find_last_of(" \t");
+        if (lastSpace == std::string::npos || lastSpace + 1 >= signature.size()) {
+            searchStart = parenPos + 1;
+            continue;
+        }
+
+        return signature.substr(lastSpace + 1);
+    }
+}
+
+bool translateShader(RegisteredShader& shader) {
+    if (shader.translated) {
+        return shader.translation.succeeded;
+    }
+
+    shader.translation = shaderTranslator().translateToMSL(shader.stage, shader.glslSource,
+                                                           shader.options);
+    shader.translated = true;
+    return shader.translation.succeeded;
+}
+#endif
+
+bool populateDescriptorShaders(const StateSnapshot& snapshot, PipelineDescriptor& descriptor) {
+#ifdef METALCRAFT_HAS_SHADER_TRANSLATOR
+    auto& shaders = shaderMapStorage();
+
+    if (snapshot.shaders.vertexShader != 0) {
+        auto vertexIt = shaders.find(snapshot.shaders.vertexShader);
+        if (vertexIt == shaders.end() || vertexIt->second.stage != ShaderStage::Vertex ||
+            !translateShader(vertexIt->second)) {
+            return false;
+        }
+        descriptor.vertexMSL = vertexIt->second.translation.output.msl;
+        descriptor.vertexFunction =
+            inferStageFunctionName(descriptor.vertexMSL, ShaderStage::Vertex,
+                                   vertexIt->second.translation.output.entryPoint);
+    }
+
+    if (snapshot.shaders.fragmentShader != 0) {
+        auto fragmentIt = shaders.find(snapshot.shaders.fragmentShader);
+        if (fragmentIt == shaders.end() || fragmentIt->second.stage != ShaderStage::Fragment ||
+            !translateShader(fragmentIt->second)) {
+            return false;
+        }
+        descriptor.fragmentMSL = fragmentIt->second.translation.output.msl;
+        descriptor.fragmentFunction =
+            inferStageFunctionName(descriptor.fragmentMSL, ShaderStage::Fragment,
+                                   fragmentIt->second.translation.output.entryPoint);
+    }
+#endif
+
+    return true;
 }
 
 } // namespace detail
@@ -145,6 +284,46 @@ void MetalCraftJNI_SetRenderPassState(jint colorFormat, jint depthFormat, jint s
     tracker.setTopology(metalcraft::detail::toTopology(topology));
 }
 
+jboolean MetalCraftJNI_RegisterShaderSource(jlong shaderId, jint stage, const char* glslSource,
+                                            jboolean flipVertexY) {
+    std::lock_guard<std::mutex> lock(metalcraft::detail::sharedMutex());
+    if (shaderId == 0 || glslSource == nullptr || glslSource[0] == '\0') {
+        return JNI_FALSE;
+    }
+
+    metalcraft::detail::RegisteredShader shader{};
+    shader.glslSource = glslSource;
+#ifdef METALCRAFT_HAS_SHADER_TRANSLATOR
+    shader.stage = metalcraft::detail::toShaderStage(stage);
+    shader.options.flipVertexY = flipVertexY != 0;
+    shader.options.fixupClipSpace = true;
+    shader.options.targetIOS = true;
+#else
+    shader.stage = stage;
+    shader.flipVertexY = flipVertexY != 0;
+#endif
+
+    metalcraft::detail::shaderMapStorage()[static_cast<std::uint64_t>(shaderId)] = std::move(shader);
+    return JNI_TRUE;
+}
+
+jlong MetalCraftJNI_AcquireCurrentPipeline() {
+    std::lock_guard<std::mutex> lock(metalcraft::detail::sharedMutex());
+    metalcraft::IRenderDevice* device = metalcraft::detail::ensureDevice();
+    if (device == nullptr) {
+        return 0;
+    }
+
+    metalcraft::PipelineDescriptor descriptor{};
+    descriptor.snapshot = metalcraft::GetSharedStateTracker().snapshot();
+    descriptor.key = metalcraft::GetSharedStateTracker().currentPipelineKey();
+    if (!metalcraft::detail::populateDescriptorShaders(descriptor.snapshot, descriptor)) {
+        return 0;
+    }
+
+    return static_cast<jlong>(device->acquirePipeline(descriptor));
+}
+
 jlong MetalCraftJNI_CurrentPipelineHash() {
     std::lock_guard<std::mutex> lock(metalcraft::detail::sharedMutex());
     return static_cast<jlong>(metalcraft::GetSharedStateTracker().currentPipelineKey().value);
@@ -152,11 +331,8 @@ jlong MetalCraftJNI_CurrentPipelineHash() {
 
 void MetalCraftJNI_BeginFrame() {
     std::lock_guard<std::mutex> lock(metalcraft::detail::sharedMutex());
-    auto& device = metalcraft::detail::deviceStorage();
-    if (!device) {
-        device = metalcraft::CreateRenderDevice(4 * 1024 * 1024); // 4 MB ring buffer
-    }
-    if (device) {
+    metalcraft::IRenderDevice* device = metalcraft::detail::ensureDevice();
+    if (device != nullptr) {
         device->beginFrame();
     }
 }
@@ -196,10 +372,52 @@ void MetalCraftJNI_DrawIndexed(jint topology, jint indexCount, jlong indexBuffer
     }
 }
 
-jlong MetalCraftJNI_CreateTexture(jint width, jint height, jint format, jboolean mipmapped) {
+jboolean MetalCraftJNI_DrawMulti(jint topology, jlong commandsPtr, jint drawCount, jint stride) {
+    std::lock_guard<std::mutex> lock(metalcraft::detail::sharedMutex());
+    if (commandsPtr == 0 || drawCount <= 0) {
+        return JNI_FALSE;
+    }
+
+    auto& device = metalcraft::detail::deviceStorage();
+    if (!device || !device->supportsIndirectDraw()) {
+        return JNI_FALSE;
+    }
+
+    const std::size_t commandStride =
+        stride <= 0 ? sizeof(metalcraft::IndirectDrawArraysCommand)
+                    : static_cast<std::size_t>(stride);
+    const auto* base = reinterpret_cast<const std::uint8_t*>(commandsPtr);
+    std::vector<metalcraft::IndirectDrawArraysCommand> commands;
+    commands.reserve(static_cast<std::size_t>(drawCount));
+
+    for (jint index = 0; index < drawCount; ++index) {
+        const auto* command = reinterpret_cast<const metalcraft::IndirectDrawArraysCommand*>(
+            base + static_cast<std::size_t>(index) * commandStride);
+        commands.push_back(*command);
+    }
+
+    metalcraft::IndirectDrawBatch batch{};
+    batch.topology = metalcraft::detail::toTopology(topology);
+    batch.commands = commands.data();
+    batch.commandCount = commands.size();
+    batch.stride = commandStride;
+    device->drawIndirect(batch);
+    return JNI_TRUE;
+}
+
+jlong MetalCraftJNI_GetDrawCallCount() {
     std::lock_guard<std::mutex> lock(metalcraft::detail::sharedMutex());
     auto& device = metalcraft::detail::deviceStorage();
     if (!device) {
+        return 0;
+    }
+    return static_cast<jlong>(device->drawCallCount());
+}
+
+jlong MetalCraftJNI_CreateTexture(jint width, jint height, jint format, jboolean mipmapped) {
+    std::lock_guard<std::mutex> lock(metalcraft::detail::sharedMutex());
+    metalcraft::IRenderDevice* device = metalcraft::detail::ensureDevice();
+    if (device == nullptr) {
         return 0;
     }
 
@@ -263,6 +481,28 @@ JNIEXPORT void JNICALL Java_net_kdt_pojavlaunch_render_MetalCraftBridge_nSetRend
     MetalCraftJNI_SetRenderPassState(colorFormat, depthFormat, sampleCount, topology);
 }
 
+JNIEXPORT jboolean JNICALL Java_net_kdt_pojavlaunch_render_MetalCraftBridge_nRegisterShaderSource(
+    JNIEnv* env, jclass, jlong shaderId, jint stage, jstring glslSource, jboolean flipVertexY) {
+    if (glslSource == nullptr) {
+        return JNI_FALSE;
+    }
+
+    const char* sourceChars = env->GetStringUTFChars(glslSource, nullptr);
+    if (sourceChars == nullptr) {
+        return JNI_FALSE;
+    }
+
+    const jboolean result =
+        MetalCraftJNI_RegisterShaderSource(shaderId, stage, sourceChars, flipVertexY);
+    env->ReleaseStringUTFChars(glslSource, sourceChars);
+    return result;
+}
+
+JNIEXPORT jlong JNICALL Java_net_kdt_pojavlaunch_render_MetalCraftBridge_nAcquireCurrentPipeline(
+    JNIEnv*, jclass) {
+    return MetalCraftJNI_AcquireCurrentPipeline();
+}
+
 JNIEXPORT jlong JNICALL Java_net_kdt_pojavlaunch_render_MetalCraftBridge_nCurrentPipelineHash(
     JNIEnv*, jclass) {
     return MetalCraftJNI_CurrentPipelineHash();
@@ -286,6 +526,16 @@ JNIEXPORT void JNICALL Java_net_kdt_pojavlaunch_render_MetalCraftBridge_nDraw(
 JNIEXPORT void JNICALL Java_net_kdt_pojavlaunch_render_MetalCraftBridge_nDrawIndexed(
     JNIEnv*, jclass, jint topology, jint indexCount, jlong indexBufferOffset, jint instanceCount) {
     MetalCraftJNI_DrawIndexed(topology, indexCount, indexBufferOffset, instanceCount);
+}
+
+JNIEXPORT jboolean JNICALL Java_net_kdt_pojavlaunch_render_MetalCraftBridge_nDrawMulti(
+    JNIEnv*, jclass, jint topology, jlong commandsPtr, jint drawCount, jint stride) {
+    return MetalCraftJNI_DrawMulti(topology, commandsPtr, drawCount, stride);
+}
+
+JNIEXPORT jlong JNICALL Java_net_kdt_pojavlaunch_render_MetalCraftBridge_nGetDrawCallCount(
+    JNIEnv*, jclass) {
+    return MetalCraftJNI_GetDrawCallCount();
 }
 
 JNIEXPORT jlong JNICALL Java_net_kdt_pojavlaunch_render_MetalCraftBridge_nCreateTexture(

@@ -9,6 +9,7 @@ import java.util.concurrent.*;
 import org.lwjgl.glfw.CallbackBridge;
 import org.lwjgl.glfw.GLFW;
 
+import net.kdt.pojavlaunch.render.MetalCraftBridge;
 import net.kdt.pojavlaunch.uikit.*;
 import net.kdt.pojavlaunch.utils.*;
 import net.kdt.pojavlaunch.value.*;
@@ -22,12 +23,17 @@ public class PojavLauncher {
         try {
             // Some places use macOS-specific code, which is unavailable on iOS
             // In this case, try to get it to use Linux-specific code instead.
-            com.apple.eawt.Application.getApplication();
-            Class clazz = Class.forName("com.apple.eawt.Application");
+            Class<?> clazz = Class.forName("com.apple.eawt.Application");
+            clazz.getMethod("getApplication").invoke(null);
             Field field = clazz.getDeclaredField("sApplication");
             field.setAccessible(true);
             field.set(null, null);
-            sun.font.FontUtilities.isLinux = true;
+            try {
+                Class<?> fontUtilities = Class.forName("sun.font.FontUtilities");
+                Field isLinux = fontUtilities.getDeclaredField("isLinux");
+                isLinux.setAccessible(true);
+                isLinux.setBoolean(null, true);
+            } catch (Throwable ignored) {}
             System.setProperty("java.util.prefs.PreferencesFactory", "java.util.prefs.FileSystemPreferencesFactory");
         } catch (Throwable th) {
             // Not on JRE8, ignore exception
@@ -85,6 +91,7 @@ public class PojavLauncher {
         }
 
         System.setProperty("org.lwjgl.vulkan.libname", "libMoltenVK.dylib");
+        MetalCraftBridge.bootstrapRequestedRenderer();
 
         MinecraftAccount account = MinecraftAccount.load(args[0]);
         JMinecraftVersionList.Version version = Tools.getVersionInfo(args[1]);

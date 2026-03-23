@@ -149,8 +149,19 @@ public:
         ++drawCallCount_;
     }
 
+    void drawIndirect(const IndirectDrawBatch& batch) override {
+        if (batch.commands == nullptr || batch.commandCount == 0) {
+            return;
+        }
+        drawCallCount_ += batch.commandCount;
+    }
+
     void submit() override {
         // Command encoder handles commit in endFrame
+    }
+
+    bool supportsIndirectDraw() const noexcept override {
+        return true;
     }
 
     std::size_t ringBufferCapacity() const noexcept override {

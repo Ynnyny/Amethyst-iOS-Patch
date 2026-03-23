@@ -29,14 +29,8 @@ jobs:
       - name: Restore external dependencies
         run: bash scripts/ci/restore_external_dependencies.sh
 
-      - name: Configure renderer build
-        run: cmake -S Natives/renderer -B build/metalcraft -DMETALCRAFT_BUILD_TESTS=ON
-
-      - name: Build renderer tests
-        run: cmake --build build/metalcraft -j"$(nproc)"
-
       - name: Run renderer tests
-        run: ctest --test-dir build/metalcraft --output-on-failure
+        run: bash scripts/ci/run_renderer_smoke_tests.sh build/metalcraft
 
   build-ios:
     name: Build iOS IPA

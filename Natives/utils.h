@@ -38,6 +38,8 @@
 #define RENDERER_NAME_MTL_ANGLE "libtinygl4angle.dylib"
 #define RENDERER_NAME_MOBILEGLUES "libmobileglues.dylib"
 #define RENDERER_NAME_VK_ZINK "libOSMesa.8.dylib"
+#define RENDERER_NAME_METALCRAFT "libMetalCraft.dylib"
+#define RENDERER_NAME_METALCRAFT_BACKEND RENDERER_NAME_MTL_ANGLE
 
 #define SPECIALBTN_KEYBOARD -1
 #define SPECIALBTN_TOGGLECTRL -2

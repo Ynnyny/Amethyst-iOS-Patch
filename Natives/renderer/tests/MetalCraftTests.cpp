@@ -170,19 +170,45 @@ int main() {
         return 19;
     }
 
+    IndirectDrawArraysCommand indirectCommands[] = {
+        {24, 1, 0, 0},
+        {12, 2, 24, 0},
+    };
+    IndirectDrawBatch indirectBatch{};
+    indirectBatch.topology = PrimitiveTopology::Triangles;
+    indirectBatch.commands = indirectCommands;
+    indirectBatch.commandCount = 2;
+    indirectBatch.stride = sizeof(IndirectDrawArraysCommand);
+    device->drawIndirect(indirectBatch);
+
+    if (!device->supportsIndirectDraw() || device->drawCallCount() != 5) {
+        return 20;
+    }
+
     device->endFrame();
 
-    // ====== Test 20: JNI Frame & Draw ======
+    // ====== Test 21-23: JNI Frame & Draw ======
     MetalCraftJNI_BeginFrame();
     MetalCraftJNI_Draw(static_cast<jint>(PrimitiveTopology::Triangles), 0, 36, 1);
     MetalCraftJNI_DrawIndexed(static_cast<jint>(PrimitiveTopology::Triangles), 36, 0, 1);
+    if (MetalCraftJNI_GetDrawCallCount() != 2) {
+        return 21;
+    }
+    if (MetalCraftJNI_DrawMulti(static_cast<jint>(PrimitiveTopology::Triangles),
+                                reinterpret_cast<jlong>(indirectCommands), 2,
+                                sizeof(IndirectDrawArraysCommand)) == JNI_FALSE) {
+        return 22;
+    }
+    if (MetalCraftJNI_GetDrawCallCount() != 4) {
+        return 23;
+    }
     MetalCraftJNI_EndFrame();
 
-    // ====== Test 21: JNI Texture ======
+    // ====== Test 24-25: JNI Texture ======
     const jlong texId = MetalCraftJNI_CreateTexture(
         32, 32, static_cast<jint>(PixelFormat::BGRA8Unorm), JNI_FALSE);
     if (texId == 0) {
-        return 21;
+        return 24;
     }
 
     std::vector<std::uint8_t> texPixels(32 * 32 * 4, 0xAA);
@@ -190,10 +216,10 @@ int main() {
         texId, 0, 0, 32, 32,
         reinterpret_cast<jlong>(texPixels.data()), 32 * 4);
     if (uploadResult == JNI_FALSE) {
-        return 22;
+        return 25;
     }
 
-    // ====== Test 23-25: Shader Translation ======
+    // ====== Test 26-31: Shader Translation & Pipeline Assembly ======
 #ifdef METALCRAFT_HAS_SHADER_TRANSLATOR
     ShaderTranslator translator;
     const ShaderTranslationResult vertexTranslation = translator.translateToMSL(
@@ -207,16 +233,51 @@ void main() {
     gl_Position = vec4(aPos, 1.0);
 })");
     if (!vertexTranslation.succeeded || vertexTranslation.output.spirv.empty()) {
-        return 23;
+        return 26;
     }
     if (vertexTranslation.output.msl.find("vertex") == std::string::npos ||
         vertexTranslation.output.msl.find("[[position]]") == std::string::npos) {
-        return 24;
+        return 27;
     }
     if (vertexTranslation.output.msl.find("0.5") == std::string::npos &&
         vertexTranslation.output.msl.find("gl_Position.z") == std::string::npos &&
         vertexTranslation.output.msl.find("position.z") == std::string::npos) {
-        return 25;
+        return 28;
+    }
+
+    const char* fragmentSource = R"(#version 450 core
+layout(location = 0) out vec4 fragColor;
+layout(location = 0) in vec2 vUv;
+void main() {
+    fragColor = vec4(vUv, 0.5, 1.0);
+})";
+
+    if (MetalCraftJNI_RegisterShaderSource(
+            501, static_cast<jint>(ShaderStage::Vertex),
+            R"(#version 450 core
+layout(location = 0) in vec3 aPos;
+layout(location = 1) in vec2 aUv;
+layout(location = 0) out vec2 vUv;
+void main() {
+    vUv = aUv;
+    gl_Position = vec4(aPos, 1.0);
+})",
+            JNI_FALSE) == JNI_FALSE) {
+        return 29;
+    }
+    if (MetalCraftJNI_RegisterShaderSource(
+            502, static_cast<jint>(ShaderStage::Fragment), fragmentSource,
+            JNI_FALSE) == JNI_FALSE) {
+        return 30;
+    }
+
+    MetalCraftJNI_ResetStateTracker();
+    MetalCraftJNI_BindShaders(501, 502, 901);
+    MetalCraftJNI_SetRenderPassState(static_cast<jint>(PixelFormat::BGRA8Unorm),
+                                     static_cast<jint>(PixelFormat::Depth32Float), 1,
+                                     static_cast<jint>(PrimitiveTopology::Triangles));
+    if (MetalCraftJNI_AcquireCurrentPipeline() == 0) {
+        return 31;
     }
 #endif
 

@@ -59,7 +59,8 @@ private:
 
 MTLResourceOptions bufferOptionsForDescriptor(const BufferDescriptor& descriptor) {
     if (descriptor.cpuVisible || descriptor.usage == BufferUsage::Upload ||
-        descriptor.usage == BufferUsage::Uniform) {
+        descriptor.usage == BufferUsage::Uniform ||
+        descriptor.usage == BufferUsage::Indirect) {
         return MTLResourceStorageModeShared;
     }
     return MTLResourceStorageModePrivate;

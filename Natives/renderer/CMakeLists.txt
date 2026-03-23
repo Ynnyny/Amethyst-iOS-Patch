@@ -107,7 +107,12 @@ if(APPLE)
       "-framework Metal"
       "-framework QuartzCore"
   )
-  set_target_properties(MetalCraft PROPERTIES OUTPUT_NAME "MetalCraft")
+  set_target_properties(MetalCraft PROPERTIES
+    OUTPUT_NAME "MetalCraft"
+    ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+  )
 endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND METALCRAFT_BUILD_TESTS)

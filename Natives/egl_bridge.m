@@ -49,26 +49,41 @@ int pojavInit(BOOL useStackQueue) {
 }
 
 int pojavInitOpenGL() {
-    NSString *renderer = NSProcessInfo.processInfo.environment[@"POJAV_RENDERER"];
+    NSDictionary<NSString *, NSString *> *environment = NSProcessInfo.processInfo.environment;
+    NSString *requestedRenderer = environment[@"POJAV_RENDERER"];
+    NSString *renderer = environment[@"POJAV_RENDERER_BACKEND"];
+    if (renderer.length == 0) {
+        renderer = requestedRenderer;
+    }
+    BOOL useMetalCraft = [requestedRenderer isEqualToString:@ RENDERER_NAME_METALCRAFT];
     BOOL isAuto = [renderer isEqualToString:@"auto"];
-    if (isAuto || [renderer isEqualToString:@ RENDERER_NAME_GL4ES]) {
+    if (useMetalCraft) {
+        renderer = @ RENDERER_NAME_METALCRAFT_BACKEND;
+        setenv("POJAV_RENDERER_BACKEND", renderer.UTF8String, 1);
+        set_gl_bridge_tbl();
+    } else if (isAuto || [renderer isEqualToString:@ RENDERER_NAME_GL4ES]) {
         // At this point, if renderer is still auto (unspecified major version), pick gl4es
         renderer = @ RENDERER_NAME_GL4ES;
-        setenv("POJAV_RENDERER", renderer.UTF8String, 1);
+        setenv("POJAV_RENDERER_BACKEND", renderer.UTF8String, 1);
         set_gl_bridge_tbl();
     } else if ([renderer isEqualToString:@ RENDERER_NAME_MOBILEGLUES]) {
         renderer = @ RENDERER_NAME_MOBILEGLUES;
-        setenv("POJAV_RENDERER", renderer.UTF8String, 1);
+        setenv("POJAV_RENDERER_BACKEND", renderer.UTF8String, 1);
         set_gl_bridge_tbl();
     } else if ([renderer isEqualToString:@ RENDERER_NAME_MTL_ANGLE]) {
+        setenv("POJAV_RENDERER_BACKEND", renderer.UTF8String, 1);
         set_gl_bridge_tbl();
     } else if ([renderer hasPrefix:@"libOSMesa"]) {
         setenv("GALLIUM_DRIVER","zink",1);
+        setenv("POJAV_RENDERER_BACKEND", renderer.UTF8String, 1);
         set_osm_bridge_tbl();
     }
     JNI_LWJGL_changeRenderer(renderer.UTF8String);
     // Preload renderer library
     dlopen([NSString stringWithFormat:@"@rpath/%@", renderer].UTF8String, RTLD_GLOBAL);
+    if (useMetalCraft) {
+        dlopen("@rpath/libMetalCraft.dylib", RTLD_GLOBAL);
+    }
 
     return !br_init();
     //return 0;
@@ -82,11 +97,13 @@ void pojavSetWindowHint(int hint, int value) {
             case 1:
             case 2:
                 setenv("POJAV_RENDERER", RENDERER_NAME_GL4ES, 1);
+                setenv("POJAV_RENDERER_BACKEND", RENDERER_NAME_GL4ES, 1);
                 JNI_LWJGL_changeRenderer(RENDERER_NAME_GL4ES);
                 break;
             // case 4: use Zink?
             default:
                 setenv("POJAV_RENDERER", RENDERER_NAME_MOBILEGLUES, 1);
+                setenv("POJAV_RENDERER_BACKEND", RENDERER_NAME_MOBILEGLUES, 1);
                 JNI_LWJGL_changeRenderer(RENDERER_NAME_MOBILEGLUES);
                 break;
         }
