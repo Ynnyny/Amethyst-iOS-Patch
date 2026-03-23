@@ -2,6 +2,7 @@
 #include "metalcraft/ITexture.h"
 #include "metalcraft/JNIBridge.h"
 #include "metalcraft/RingBuffer.h"
+#include "metalcraft/ShaderTranslator.h"
 #include "metalcraft/StateTracker.h"
 
 #include <cstdint>
@@ -191,6 +192,33 @@ int main() {
     if (uploadResult == JNI_FALSE) {
         return 22;
     }
+
+    // ====== Test 23-25: Shader Translation ======
+#ifdef METALCRAFT_HAS_SHADER_TRANSLATOR
+    ShaderTranslator translator;
+    const ShaderTranslationResult vertexTranslation = translator.translateToMSL(
+        ShaderStage::Vertex,
+        R"(#version 450 core
+layout(location = 0) in vec3 aPos;
+layout(location = 1) in vec2 aUv;
+layout(location = 0) out vec2 vUv;
+void main() {
+    vUv = aUv;
+    gl_Position = vec4(aPos, 1.0);
+})");
+    if (!vertexTranslation.succeeded || vertexTranslation.output.spirv.empty()) {
+        return 23;
+    }
+    if (vertexTranslation.output.msl.find("vertex") == std::string::npos ||
+        vertexTranslation.output.msl.find("[[position]]") == std::string::npos) {
+        return 24;
+    }
+    if (vertexTranslation.output.msl.find("0.5") == std::string::npos &&
+        vertexTranslation.output.msl.find("gl_Position.z") == std::string::npos &&
+        vertexTranslation.output.msl.find("position.z") == std::string::npos) {
+        return 25;
+    }
+#endif
 
     return 0;
 }

@@ -2,15 +2,22 @@
 #include "jni.h"
 
 JNIEXPORT jstring JNICALL Java_net_kdt_pojavlaunch_value_MinecraftAccount_getAccessTokenFromKeychain(JNIEnv *env, jclass clazz, jstring xuid) {
-    // This function should only be called once
-    static BOOL called = NO;
-    if (called) {
-        abort();
+    (void)clazz;
+    if (xuid == NULL) {
+        return (*env)->NewStringUTF(env, "offline");
     }
-    called = YES;
 
     const char *xuidC = (*env)->GetStringUTFChars(env, xuid, 0);
-    NSString *accessToken = [NSClassFromString(@"MicrosoftAuthenticator") tokenDataOfProfile:@(xuidC)][@"accessToken"];
+    NSString *profileKey = @(xuidC);
+    NSString *accessToken = nil;
+    if ([profileKey hasPrefix:@"offline:"]) {
+        accessToken = @"offline";
+    } else {
+        accessToken = [NSClassFromString(@"MicrosoftAuthenticator") tokenDataOfProfile:profileKey][@"accessToken"];
+    }
     (*env)->ReleaseStringUTFChars(env, xuid, xuidC);
+    if (accessToken.length == 0) {
+        accessToken = @"offline";
+    }
     return (*env)->NewStringUTF(env, accessToken.UTF8String);
 }
