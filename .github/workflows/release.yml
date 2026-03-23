@@ -3,6 +3,9 @@ name: Release build
 on:
   workflow_dispatch
 
+permissions:
+  contents: read
+
 jobs:
   build:
     name: Release build
@@ -21,12 +24,12 @@ jobs:
     runs-on: macos-14
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: recursive
 
       - name: Set up JDK 8
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           java-version: "8"
           distribution: zulu
@@ -34,7 +37,11 @@ jobs:
 
       - name: Install toolchain dependencies
         run: |
-          brew install make ldid wget
+          for formula in make ldid wget; do
+            if ! brew list --formula "$formula" >/dev/null 2>&1; then
+              brew install "$formula"
+            fi
+          done
           echo "/opt/homebrew/opt/make/libexec/gnubin" >> "$GITHUB_PATH"
 
       - name: Restore external dependencies
@@ -94,21 +101,21 @@ jobs:
           fi
 
       - name: Upload regular ipa
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: org.angelauramc.amethyst-${{ matrix.platform_name }}.ipa
           path: artifacts/org.angelauramc.amethyst-*-${{ matrix.platform_name }}.ipa
           if-no-files-found: error
 
       - name: Upload regular tipa
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: org.angelauramc.amethyst-${{ matrix.platform_name }}-trollstore.tipa
           path: artifacts/org.angelauramc.amethyst-*-${{ matrix.platform_name }}-trollstore.tipa
           if-no-files-found: warn
 
       - name: Upload PojavLauncher.dSYM
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: matrix.platform_name == 'ios'
         with:
           name: AngelAuraAmethyst.dSYM
