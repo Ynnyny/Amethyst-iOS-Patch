@@ -21,18 +21,51 @@
 
 int clientAPI;
 
+typedef jboolean (*MetalCraftIsSupportedProc)(void);
+typedef void (*MetalCraftShutdownProc)(void);
+
 void JNI_LWJGL_changeRenderer(const char* value_c) {
+    if (runtimeJavaVMPtr == NULL || value_c == NULL) {
+        return;
+    }
+
     JNIEnv *env;
-    (*runtimeJavaVMPtr)->GetEnv(runtimeJavaVMPtr, (void **)&env, JNI_VERSION_1_4);
+    if ((*runtimeJavaVMPtr)->GetEnv(runtimeJavaVMPtr, (void **)&env, JNI_VERSION_1_4) != JNI_OK ||
+        env == NULL) {
+        return;
+    }
+
     jstring key = (*env)->NewStringUTF(env, "org.lwjgl.opengl.libname");
     jstring value = (*env)->NewStringUTF(env, value_c);
     jclass clazz = (*env)->FindClass(env, "java/lang/System");
+    if (key == NULL || value == NULL || clazz == NULL) {
+        if (key != NULL) (*env)->DeleteLocalRef(env, key);
+        if (value != NULL) (*env)->DeleteLocalRef(env, value);
+        if (clazz != NULL) (*env)->DeleteLocalRef(env, clazz);
+        return;
+    }
+
     jmethodID method = (*env)->GetStaticMethodID(env, clazz, "setProperty", "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;");
-    (*env)->CallStaticObjectMethod(env, clazz, method, key, value);
+    if (method != NULL) {
+        jobject oldValue = (*env)->CallStaticObjectMethod(env, clazz, method, key, value);
+        if (oldValue != NULL) {
+            (*env)->DeleteLocalRef(env, oldValue);
+        }
+    }
+    (*env)->DeleteLocalRef(env, clazz);
+    (*env)->DeleteLocalRef(env, value);
+    (*env)->DeleteLocalRef(env, key);
 }
 
 void pojavTerminate() {
     CallbackBridge_nativeSetInputReady(NO);
+    if (getenv("POJAV_METALCRAFT_ENABLED") != NULL) {
+        MetalCraftShutdownProc shutdownProc =
+            (MetalCraftShutdownProc)dlsym(RTLD_DEFAULT, "MetalCraftJNI_Shutdown");
+        if (shutdownProc != NULL) {
+            shutdownProc();
+        }
+    }
     if (!br_terminate) return;
     br_terminate();
 }
@@ -54,6 +87,9 @@ int pojavInitOpenGL() {
     NSString *renderer = environment[@"POJAV_RENDERER_BACKEND"];
     if (renderer.length == 0) {
         renderer = requestedRenderer;
+    }
+    if (renderer.length == 0) {
+        renderer = @"auto";
     }
     BOOL useMetalCraft = [requestedRenderer isEqualToString:@ RENDERER_NAME_METALCRAFT];
     BOOL isAuto = [renderer isEqualToString:@"auto"];
@@ -82,7 +118,14 @@ int pojavInitOpenGL() {
     // Preload renderer library
     dlopen([NSString stringWithFormat:@"@rpath/%@", renderer].UTF8String, RTLD_GLOBAL);
     if (useMetalCraft) {
-        dlopen("@rpath/libMetalCraft.dylib", RTLD_GLOBAL);
+        void *metalCraftHandle = dlopen("@rpath/libMetalCraft.dylib", RTLD_GLOBAL);
+        if (metalCraftHandle != NULL) {
+            MetalCraftIsSupportedProc isSupported =
+                (MetalCraftIsSupportedProc)dlsym(metalCraftHandle, "MetalCraftJNI_IsSupported");
+            if (isSupported != NULL && isSupported() == JNI_FALSE) {
+                unsetenv("POJAV_METALCRAFT_ENABLED");
+            }
+        }
     }
 
     return !br_init();
@@ -92,7 +135,13 @@ int pojavInitOpenGL() {
 void pojavSetWindowHint(int hint, int value) {
     if (hint == GLFW_CLIENT_API) {
         clientAPI = value;
-    } else if (strcmp(getenv("POJAV_RENDERER"), "auto")==0 && hint == GLFW_CONTEXT_VERSION_MAJOR) {
+    } else {
+        const char *requestedRenderer = getenv("POJAV_RENDERER");
+        if (requestedRenderer == NULL || strcmp(requestedRenderer, "auto") != 0 ||
+            hint != GLFW_CONTEXT_VERSION_MAJOR) {
+            return;
+        }
+
         switch (value) {
             case 1:
             case 2:

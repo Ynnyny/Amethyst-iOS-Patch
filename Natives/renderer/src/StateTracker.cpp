@@ -58,6 +58,9 @@ void StateTracker::reset() {
 }
 
 void StateTracker::setBlendEnabled(bool enabled) {
+    if (snapshot_.blend.enabled == enabled) {
+        return;
+    }
     snapshot_.blend.enabled = enabled;
     markDirty();
 }
@@ -65,6 +68,11 @@ void StateTracker::setBlendEnabled(bool enabled) {
 void StateTracker::setBlendFactors(BlendFactor srcColor, BlendFactor dstColor,
                                    BlendFactor srcAlpha, BlendFactor dstAlpha,
                                    BlendOp colorOp, BlendOp alphaOp) {
+    if (snapshot_.blend.srcColor == srcColor && snapshot_.blend.dstColor == dstColor &&
+        snapshot_.blend.srcAlpha == srcAlpha && snapshot_.blend.dstAlpha == dstAlpha &&
+        snapshot_.blend.colorOp == colorOp && snapshot_.blend.alphaOp == alphaOp) {
+        return;
+    }
     snapshot_.blend.srcColor = srcColor;
     snapshot_.blend.dstColor = dstColor;
     snapshot_.blend.srcAlpha = srcAlpha;
@@ -75,11 +83,19 @@ void StateTracker::setBlendFactors(BlendFactor srcColor, BlendFactor dstColor,
 }
 
 void StateTracker::setBlendWriteMask(std::uint8_t writeMask) {
+    if (snapshot_.blend.writeMask == writeMask) {
+        return;
+    }
     snapshot_.blend.writeMask = writeMask;
     markDirty();
 }
 
 void StateTracker::setDepthState(bool testEnabled, bool writeEnabled, CompareOp compareOp) {
+    if (snapshot_.depth.testEnabled == testEnabled &&
+        snapshot_.depth.writeEnabled == writeEnabled &&
+        snapshot_.depth.compareOp == compareOp) {
+        return;
+    }
     snapshot_.depth.testEnabled = testEnabled;
     snapshot_.depth.writeEnabled = writeEnabled;
     snapshot_.depth.compareOp = compareOp;
@@ -88,6 +104,11 @@ void StateTracker::setDepthState(bool testEnabled, bool writeEnabled, CompareOp 
 
 void StateTracker::bindShaders(std::uint64_t vertexShader, std::uint64_t fragmentShader,
                                std::uint64_t vertexLayout) {
+    if (snapshot_.shaders.vertexShader == vertexShader &&
+        snapshot_.shaders.fragmentShader == fragmentShader &&
+        snapshot_.shaders.vertexLayout == vertexLayout) {
+        return;
+    }
     snapshot_.shaders.vertexShader = vertexShader;
     snapshot_.shaders.fragmentShader = fragmentShader;
     snapshot_.shaders.vertexLayout = vertexLayout;
@@ -95,15 +116,24 @@ void StateTracker::bindShaders(std::uint64_t vertexShader, std::uint64_t fragmen
 }
 
 void StateTracker::setTopology(PrimitiveTopology topology) {
+    if (snapshot_.topology == topology) {
+        return;
+    }
     snapshot_.topology = topology;
     markDirty();
 }
 
 void StateTracker::setRenderPassFormats(PixelFormat colorFormat, PixelFormat depthFormat,
                                         std::uint8_t sampleCount) {
+    const std::uint8_t normalizedSampleCount = sampleCount == 0 ? 1 : sampleCount;
+    if (snapshot_.formats.colorFormat == colorFormat &&
+        snapshot_.formats.depthFormat == depthFormat &&
+        snapshot_.formats.sampleCount == normalizedSampleCount) {
+        return;
+    }
     snapshot_.formats.colorFormat = colorFormat;
     snapshot_.formats.depthFormat = depthFormat;
-    snapshot_.formats.sampleCount = sampleCount == 0 ? 1 : sampleCount;
+    snapshot_.formats.sampleCount = normalizedSampleCount;
     markDirty();
 }
 

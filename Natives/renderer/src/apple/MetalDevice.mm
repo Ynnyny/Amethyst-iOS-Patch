@@ -54,6 +54,10 @@ public:
             pipelineManagerHandle_ = MetalPipelineManagerCreate(deviceHandle_);
             depthStencilManagerHandle_ = MetalDepthStencilManagerCreate(deviceHandle_);
             commandEncoderHandle_ = MetalCommandEncoderCreate(commandQueueHandle_);
+
+            ready_ = deviceHandle_ != nullptr && commandQueueHandle_ != nullptr &&
+                     uploadBufferHandle_ != nullptr && pipelineManagerHandle_ != nullptr &&
+                     depthStencilManagerHandle_ != nullptr && commandEncoderHandle_ != nullptr;
         }
     }
 
@@ -160,6 +164,10 @@ public:
         // Command encoder handles commit in endFrame
     }
 
+    bool isReady() const noexcept override {
+        return ready_;
+    }
+
     bool supportsIndirectDraw() const noexcept override {
         return true;
     }
@@ -182,6 +190,7 @@ private:
     std::size_t ringBufferCapacity_ = 0;
     std::size_t ringOffset_ = 0;
     std::size_t drawCallCount_ = 0;
+    bool ready_ = false;
 };
 
 } // namespace

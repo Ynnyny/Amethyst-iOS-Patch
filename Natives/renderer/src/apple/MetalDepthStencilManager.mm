@@ -15,6 +15,7 @@ MTLCompareFunction toCompareFunction(CompareOp op) {
         case CompareOp::Less: return MTLCompareFunctionLess;
         case CompareOp::LessEqual: return MTLCompareFunctionLessEqual;
         case CompareOp::Equal: return MTLCompareFunctionEqual;
+        case CompareOp::NotEqual: return MTLCompareFunctionNotEqual;
         case CompareOp::Greater: return MTLCompareFunctionGreater;
         case CompareOp::GreaterEqual: return MTLCompareFunctionGreaterEqual;
         case CompareOp::Always: return MTLCompareFunctionAlways;

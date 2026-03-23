@@ -64,26 +64,55 @@ MTLColorWriteMask toColorWriteMask(std::uint8_t mask) {
     return writeMask;
 }
 
-id<MTLRenderPipelineState> buildPipeline(const void* deviceHandle, const PipelineDescriptor& descriptor) {
-    if (deviceHandle == nullptr || descriptor.vertexMSL.empty() || descriptor.fragmentMSL.empty()) {
+id<MTLLibrary> buildLibrary(id<MTLDevice> device, const std::string& source) {
+    if (device == nil || source.empty()) {
         return nil;
     }
 
-    id<MTLDevice> device = (__bridge id<MTLDevice>)deviceHandle;
-    NSString* vertexSource = [NSString stringWithUTF8String:descriptor.vertexMSL.c_str()];
-    NSString* fragmentSource = [NSString stringWithUTF8String:descriptor.fragmentMSL.c_str()];
-    NSString* combinedSource = [NSString stringWithFormat:@"%@\n%@", vertexSource, fragmentSource];
+    NSString* shaderSource = [NSString stringWithUTF8String:source.c_str()];
+    if (shaderSource == nil) {
+        return nil;
+    }
 
     NSError* libraryError = nil;
-    id<MTLLibrary> library = [device newLibraryWithSource:combinedSource options:nil error:&libraryError];
+    id<MTLLibrary> library = [device newLibraryWithSource:shaderSource options:nil error:&libraryError];
     if (library == nil || libraryError != nil) {
         return nil;
     }
 
-    NSString* vertexFunctionName = [NSString stringWithUTF8String:descriptor.vertexFunction.c_str()];
-    NSString* fragmentFunctionName = [NSString stringWithUTF8String:descriptor.fragmentFunction.c_str()];
-    id<MTLFunction> vertexFunction = [library newFunctionWithName:vertexFunctionName];
-    id<MTLFunction> fragmentFunction = [library newFunctionWithName:fragmentFunctionName];
+    return library;
+}
+
+id<MTLFunction> buildFunction(id<MTLDevice> device, const std::string& source,
+                              const std::string& functionName) {
+    if (functionName.empty()) {
+        return nil;
+    }
+
+    id<MTLLibrary> library = buildLibrary(device, source);
+    if (library == nil) {
+        return nil;
+    }
+
+    NSString* mtlFunctionName = [NSString stringWithUTF8String:functionName.c_str()];
+    if (mtlFunctionName == nil) {
+        return nil;
+    }
+
+    return [library newFunctionWithName:mtlFunctionName];
+}
+
+id<MTLRenderPipelineState> buildPipeline(const void* deviceHandle, const PipelineDescriptor& descriptor) {
+    if (deviceHandle == nullptr || descriptor.vertexMSL.empty() || descriptor.fragmentMSL.empty() ||
+        descriptor.snapshot.formats.colorFormat == PixelFormat::Invalid) {
+        return nil;
+    }
+
+    id<MTLDevice> device = (__bridge id<MTLDevice>)deviceHandle;
+    id<MTLFunction> vertexFunction =
+        buildFunction(device, descriptor.vertexMSL, descriptor.vertexFunction);
+    id<MTLFunction> fragmentFunction =
+        buildFunction(device, descriptor.fragmentMSL, descriptor.fragmentFunction);
     if (vertexFunction == nil || fragmentFunction == nil) {
         return nil;
     }

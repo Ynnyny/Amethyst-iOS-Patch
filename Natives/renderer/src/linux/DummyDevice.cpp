@@ -79,6 +79,10 @@ public:
 
     void submit() override {}
 
+    bool isReady() const noexcept override {
+        return true;
+    }
+
     bool supportsIndirectDraw() const noexcept override {
         return true;
     }

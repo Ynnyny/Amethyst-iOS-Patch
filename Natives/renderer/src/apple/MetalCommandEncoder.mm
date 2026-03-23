@@ -14,12 +14,22 @@ public:
     explicit CommandEncoderBox(const void* commandQueueHandle)
         : commandQueueHandle_(commandQueueHandle) {}
 
-    ~CommandEncoderBox() = default;
+    ~CommandEncoderBox() {
+        if (currentCommandBufferHandle_ != nullptr) {
+            (void)CFBridgingRelease(currentCommandBufferHandle_);
+            currentCommandBufferHandle_ = nullptr;
+        }
+    }
 
     void beginFrame() {
         @autoreleasepool {
             if (commandQueueHandle_ == nullptr) {
                 return;
+            }
+
+            if (currentCommandBufferHandle_ != nullptr) {
+                (void)CFBridgingRelease(currentCommandBufferHandle_);
+                currentCommandBufferHandle_ = nullptr;
             }
 
             id<MTLCommandQueue> queue = (__bridge id<MTLCommandQueue>)commandQueueHandle_;

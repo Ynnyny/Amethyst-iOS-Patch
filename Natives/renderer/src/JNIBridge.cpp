@@ -65,11 +65,38 @@ CompareOp toCompareOp(jint value) noexcept {
         case static_cast<jint>(CompareOp::Less): return CompareOp::Less;
         case static_cast<jint>(CompareOp::LessEqual): return CompareOp::LessEqual;
         case static_cast<jint>(CompareOp::Equal): return CompareOp::Equal;
+        case static_cast<jint>(CompareOp::NotEqual): return CompareOp::NotEqual;
         case static_cast<jint>(CompareOp::Greater): return CompareOp::Greater;
         case static_cast<jint>(CompareOp::GreaterEqual): return CompareOp::GreaterEqual;
         case static_cast<jint>(CompareOp::Always): return CompareOp::Always;
         default: return CompareOp::LessEqual;
     }
+}
+
+bool isValidBufferUsage(jint value) noexcept {
+    switch (static_cast<BufferUsage>(value)) {
+        case BufferUsage::Vertex:
+        case BufferUsage::Index:
+        case BufferUsage::Uniform:
+        case BufferUsage::Upload:
+        case BufferUsage::Indirect:
+            return true;
+    }
+
+    return false;
+}
+
+BufferUsage toBufferUsage(jint value) noexcept {
+    switch (static_cast<BufferUsage>(value)) {
+        case BufferUsage::Vertex:
+        case BufferUsage::Index:
+        case BufferUsage::Uniform:
+        case BufferUsage::Upload:
+        case BufferUsage::Indirect:
+            return static_cast<BufferUsage>(value);
+    }
+
+    return BufferUsage::Vertex;
 }
 
 PrimitiveTopology toTopology(jint value) noexcept {
@@ -94,6 +121,17 @@ PixelFormat toPixelFormat(jint value) noexcept {
 }
 
 #ifdef METALCRAFT_HAS_SHADER_TRANSLATOR
+bool isValidShaderStage(jint value) noexcept {
+    switch (static_cast<ShaderStage>(value)) {
+        case ShaderStage::Vertex:
+        case ShaderStage::Fragment:
+        case ShaderStage::Compute:
+            return true;
+    }
+
+    return false;
+}
+
 ShaderStage toShaderStage(jint value) noexcept {
     switch (value) {
         case static_cast<jint>(ShaderStage::Vertex): return ShaderStage::Vertex;
@@ -119,9 +157,19 @@ std::unordered_map<std::uint64_t, TexturePtr>& textureMapStorage() {
     return textures;
 }
 
+std::unordered_map<std::uint64_t, BufferPtr>& bufferMapStorage() {
+    static std::unordered_map<std::uint64_t, BufferPtr> buffers;
+    return buffers;
+}
+
 std::unordered_map<std::uint64_t, RegisteredShader>& shaderMapStorage() {
     static std::unordered_map<std::uint64_t, RegisteredShader> shaders;
     return shaders;
+}
+
+std::uint64_t nextBufferId() {
+    static std::uint64_t id = 1;
+    return id++;
 }
 
 std::uint64_t nextTextureId() {
@@ -134,7 +182,19 @@ IRenderDevice* ensureDevice() {
     if (!device) {
         device = metalcraft::CreateRenderDevice(4 * 1024 * 1024);
     }
+    if (!device || !device->isReady()) {
+        device.reset();
+        return nullptr;
+    }
     return device.get();
+}
+
+void clearResourcesLocked() {
+    bufferMapStorage().clear();
+    textureMapStorage().clear();
+    shaderMapStorage().clear();
+    trackerStorage().reset();
+    deviceStorage().reset();
 }
 
 #ifdef METALCRAFT_HAS_SHADER_TRANSLATOR
@@ -242,6 +302,16 @@ StateTracker& GetSharedStateTracker() {
 
 extern "C" {
 
+jboolean MetalCraftJNI_IsSupported() {
+    std::lock_guard<std::mutex> lock(metalcraft::detail::sharedMutex());
+    return metalcraft::detail::ensureDevice() != nullptr ? JNI_TRUE : JNI_FALSE;
+}
+
+void MetalCraftJNI_Shutdown() {
+    std::lock_guard<std::mutex> lock(metalcraft::detail::sharedMutex());
+    metalcraft::detail::clearResourcesLocked();
+}
+
 void MetalCraftJNI_ResetStateTracker() {
     std::lock_guard<std::mutex> lock(metalcraft::detail::sharedMutex());
     metalcraft::GetSharedStateTracker().reset();
@@ -294,6 +364,9 @@ jboolean MetalCraftJNI_RegisterShaderSource(jlong shaderId, jint stage, const ch
     metalcraft::detail::RegisteredShader shader{};
     shader.glslSource = glslSource;
 #ifdef METALCRAFT_HAS_SHADER_TRANSLATOR
+    if (!metalcraft::detail::isValidShaderStage(stage)) {
+        return JNI_FALSE;
+    }
     shader.stage = metalcraft::detail::toShaderStage(stage);
     shader.options.flipVertexY = flipVertexY != 0;
     shader.options.fixupClipSpace = true;
@@ -347,6 +420,10 @@ void MetalCraftJNI_EndFrame() {
 
 void MetalCraftJNI_Draw(jint topology, jint vertexStart, jint vertexCount, jint instanceCount) {
     std::lock_guard<std::mutex> lock(metalcraft::detail::sharedMutex());
+    if (vertexStart < 0 || vertexCount <= 0 || instanceCount <= 0) {
+        return;
+    }
+
     auto& device = metalcraft::detail::deviceStorage();
     if (device) {
         metalcraft::DrawCallInfo info{};
@@ -361,6 +438,10 @@ void MetalCraftJNI_Draw(jint topology, jint vertexStart, jint vertexCount, jint 
 void MetalCraftJNI_DrawIndexed(jint topology, jint indexCount, jlong indexBufferOffset,
                                jint instanceCount) {
     std::lock_guard<std::mutex> lock(metalcraft::detail::sharedMutex());
+    if (indexCount <= 0 || indexBufferOffset < 0 || instanceCount <= 0) {
+        return;
+    }
+
     auto& device = metalcraft::detail::deviceStorage();
     if (device) {
         metalcraft::DrawCallInfo info{};
@@ -374,7 +455,7 @@ void MetalCraftJNI_DrawIndexed(jint topology, jint indexCount, jlong indexBuffer
 
 jboolean MetalCraftJNI_DrawMulti(jint topology, jlong commandsPtr, jint drawCount, jint stride) {
     std::lock_guard<std::mutex> lock(metalcraft::detail::sharedMutex());
-    if (commandsPtr == 0 || drawCount <= 0) {
+    if (commandsPtr <= 0 || drawCount <= 0) {
         return JNI_FALSE;
     }
 
@@ -414,8 +495,78 @@ jlong MetalCraftJNI_GetDrawCallCount() {
     return static_cast<jlong>(device->drawCallCount());
 }
 
+jboolean MetalCraftJNI_DestroyBuffer(jlong bufferId) {
+    std::lock_guard<std::mutex> lock(metalcraft::detail::sharedMutex());
+    if (bufferId == 0) {
+        return JNI_FALSE;
+    }
+
+    auto& buffers = metalcraft::detail::bufferMapStorage();
+    const auto erased = buffers.erase(static_cast<std::uint64_t>(bufferId));
+    return erased > 0 ? JNI_TRUE : JNI_FALSE;
+}
+
+jlong MetalCraftJNI_CreateBuffer(jlong size, jint usage, jboolean cpuVisible) {
+    std::lock_guard<std::mutex> lock(metalcraft::detail::sharedMutex());
+    if (size <= 0 || !metalcraft::detail::isValidBufferUsage(usage)) {
+        return 0;
+    }
+
+    metalcraft::IRenderDevice* device = metalcraft::detail::ensureDevice();
+    if (device == nullptr) {
+        return 0;
+    }
+
+    metalcraft::BufferDescriptor descriptor{};
+    descriptor.size = static_cast<std::size_t>(size);
+    descriptor.usage = metalcraft::detail::toBufferUsage(usage);
+    descriptor.cpuVisible = cpuVisible != 0;
+
+    auto buffer = device->createBuffer(descriptor);
+    if (!buffer) {
+        return 0;
+    }
+
+    const std::uint64_t id = metalcraft::detail::nextBufferId();
+    metalcraft::detail::bufferMapStorage()[id] = std::move(buffer);
+    return static_cast<jlong>(id);
+}
+
+jboolean MetalCraftJNI_UpdateBuffer(jlong bufferId, jlong offset, jlong dataPtr, jlong length) {
+    std::lock_guard<std::mutex> lock(metalcraft::detail::sharedMutex());
+    if (bufferId == 0 || offset < 0 || dataPtr == 0 || length <= 0) {
+        return JNI_FALSE;
+    }
+
+    auto& buffers = metalcraft::detail::bufferMapStorage();
+    auto it = buffers.find(static_cast<std::uint64_t>(bufferId));
+    if (it == buffers.end() || !it->second) {
+        return JNI_FALSE;
+    }
+
+    const bool updated = it->second->update(static_cast<std::size_t>(offset),
+                                            reinterpret_cast<const void*>(dataPtr),
+                                            static_cast<std::size_t>(length));
+    return updated ? JNI_TRUE : JNI_FALSE;
+}
+
+jboolean MetalCraftJNI_DestroyTexture(jlong textureId) {
+    std::lock_guard<std::mutex> lock(metalcraft::detail::sharedMutex());
+    if (textureId == 0) {
+        return JNI_FALSE;
+    }
+
+    auto& textures = metalcraft::detail::textureMapStorage();
+    const auto erased = textures.erase(static_cast<std::uint64_t>(textureId));
+    return erased > 0 ? JNI_TRUE : JNI_FALSE;
+}
+
 jlong MetalCraftJNI_CreateTexture(jint width, jint height, jint format, jboolean mipmapped) {
     std::lock_guard<std::mutex> lock(metalcraft::detail::sharedMutex());
+    if (width <= 0 || height <= 0) {
+        return 0;
+    }
+
     metalcraft::IRenderDevice* device = metalcraft::detail::ensureDevice();
     if (device == nullptr) {
         return 0;
@@ -440,6 +591,11 @@ jlong MetalCraftJNI_CreateTexture(jint width, jint height, jint format, jboolean
 jboolean MetalCraftJNI_UploadTexture(jlong textureId, jint x, jint y, jint w, jint h,
                                      jlong dataPtr, jlong bytesPerRow) {
     std::lock_guard<std::mutex> lock(metalcraft::detail::sharedMutex());
+    if (textureId == 0 || x < 0 || y < 0 || w <= 0 || h <= 0 || dataPtr == 0 ||
+        bytesPerRow <= 0) {
+        return JNI_FALSE;
+    }
+
     auto& textures = metalcraft::detail::textureMapStorage();
     auto it = textures.find(static_cast<std::uint64_t>(textureId));
     if (it == textures.end() || !it->second) {
@@ -457,6 +613,16 @@ jboolean MetalCraftJNI_UploadTexture(jlong textureId, jint x, jint y, jint w, ji
 JNIEXPORT void JNICALL Java_net_kdt_pojavlaunch_render_MetalCraftBridge_nResetStateTracker(
     JNIEnv*, jclass) {
     MetalCraftJNI_ResetStateTracker();
+}
+
+JNIEXPORT void JNICALL Java_net_kdt_pojavlaunch_render_MetalCraftBridge_nShutdown(
+    JNIEnv*, jclass) {
+    MetalCraftJNI_Shutdown();
+}
+
+JNIEXPORT jboolean JNICALL Java_net_kdt_pojavlaunch_render_MetalCraftBridge_nIsSupported(
+    JNIEnv*, jclass) {
+    return MetalCraftJNI_IsSupported();
 }
 
 JNIEXPORT void JNICALL Java_net_kdt_pojavlaunch_render_MetalCraftBridge_nSetBlendState(
@@ -536,6 +702,26 @@ JNIEXPORT jboolean JNICALL Java_net_kdt_pojavlaunch_render_MetalCraftBridge_nDra
 JNIEXPORT jlong JNICALL Java_net_kdt_pojavlaunch_render_MetalCraftBridge_nGetDrawCallCount(
     JNIEnv*, jclass) {
     return MetalCraftJNI_GetDrawCallCount();
+}
+
+JNIEXPORT jboolean JNICALL Java_net_kdt_pojavlaunch_render_MetalCraftBridge_nDestroyBuffer(
+    JNIEnv*, jclass, jlong bufferId) {
+    return MetalCraftJNI_DestroyBuffer(bufferId);
+}
+
+JNIEXPORT jlong JNICALL Java_net_kdt_pojavlaunch_render_MetalCraftBridge_nCreateBuffer(
+    JNIEnv*, jclass, jlong size, jint usage, jboolean cpuVisible) {
+    return MetalCraftJNI_CreateBuffer(size, usage, cpuVisible);
+}
+
+JNIEXPORT jboolean JNICALL Java_net_kdt_pojavlaunch_render_MetalCraftBridge_nUpdateBuffer(
+    JNIEnv*, jclass, jlong bufferId, jlong offset, jlong dataPtr, jlong length) {
+    return MetalCraftJNI_UpdateBuffer(bufferId, offset, dataPtr, length);
+}
+
+JNIEXPORT jboolean JNICALL Java_net_kdt_pojavlaunch_render_MetalCraftBridge_nDestroyTexture(
+    JNIEnv*, jclass, jlong textureId) {
+    return MetalCraftJNI_DestroyTexture(textureId);
 }
 
 JNIEXPORT jlong JNICALL Java_net_kdt_pojavlaunch_render_MetalCraftBridge_nCreateTexture(

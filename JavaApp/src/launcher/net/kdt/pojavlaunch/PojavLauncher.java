@@ -10,6 +10,7 @@ import org.lwjgl.glfw.CallbackBridge;
 import org.lwjgl.glfw.GLFW;
 
 import net.kdt.pojavlaunch.render.MetalCraftBridge;
+import net.kdt.pojavlaunch.render.MetalCraftGLInterceptor;
 import net.kdt.pojavlaunch.uikit.*;
 import net.kdt.pojavlaunch.utils.*;
 import net.kdt.pojavlaunch.value.*;
@@ -92,6 +93,7 @@ public class PojavLauncher {
 
         System.setProperty("org.lwjgl.vulkan.libname", "libMoltenVK.dylib");
         MetalCraftBridge.bootstrapRequestedRenderer();
+        MetalCraftGLInterceptor.bootstrap();
 
         MinecraftAccount account = MinecraftAccount.load(args[0]);
         JMinecraftVersionList.Version version = Tools.getVersionInfo(args[1]);

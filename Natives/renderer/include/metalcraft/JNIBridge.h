@@ -11,6 +11,8 @@ StateTracker& GetSharedStateTracker();
 
 extern "C" {
 
+jboolean MetalCraftJNI_IsSupported();
+void MetalCraftJNI_Shutdown();
 void MetalCraftJNI_ResetStateTracker();
 void MetalCraftJNI_SetBlendState(jboolean enabled, jint srcColor, jint dstColor, jint srcAlpha,
                                  jint dstAlpha, jint colorOp, jint alphaOp, jint writeMask);
@@ -30,6 +32,10 @@ void MetalCraftJNI_DrawIndexed(jint topology, jint indexCount, jlong indexBuffer
                                jint instanceCount);
 jboolean MetalCraftJNI_DrawMulti(jint topology, jlong commandsPtr, jint drawCount, jint stride);
 jlong MetalCraftJNI_GetDrawCallCount();
+jboolean MetalCraftJNI_DestroyBuffer(jlong bufferId);
+jlong MetalCraftJNI_CreateBuffer(jlong size, jint usage, jboolean cpuVisible);
+jboolean MetalCraftJNI_UpdateBuffer(jlong bufferId, jlong offset, jlong dataPtr, jlong length);
+jboolean MetalCraftJNI_DestroyTexture(jlong textureId);
 jlong MetalCraftJNI_CreateTexture(jint width, jint height, jint format, jboolean mipmapped);
 jboolean MetalCraftJNI_UploadTexture(jlong textureId, jint x, jint y, jint w, jint h,
                                      jlong dataPtr, jlong bytesPerRow);

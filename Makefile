@@ -180,7 +180,10 @@ METHOD_MACHO = \
 		fi; \
 	done
 
+SKIP_TOOLCHECK_GOALS := help clean check deps
+
 # Make sure everything is already available for use. Error if they require something
+ifeq ($(filter $(SKIP_TOOLCHECK_GOALS),$(MAKECMDGOALS)),)
 ifneq ($(call METHOD_DEPCHECK,cmake --version),1)
 $(error You need to install cmake)
 endif
@@ -227,6 +230,7 @@ endif
 ifndef SDKPATH
 $(error You need to specify SDKPATH to the path of iPhoneOS.sdk. The SDK version should be 14.0 or newer.)
 endif
+endif
 
 all: clean native java jre assets payload package dsym
 
@@ -237,6 +241,7 @@ help:
 	echo '    make                                Makes everything under all'
 	echo '    make help                           Displays this message'
 	echo '    make all                            Builds the entire app'
+	echo '    make deps                           Restores external dependencies and local patches'
 	echo '    make native                         Builds the native app'
 	echo '    make java                           Builds the Java app'
 	echo '    make jre                            Downloads/unpacks the iOS JREs'
@@ -255,7 +260,12 @@ check:
 		$(info $(shell printf "%-20s" "$(v)") = $(value $(v)))) \
 	)
 
-native: dep_mg
+deps:
+	echo '[Amethyst v$(VERSION)] deps - start'
+	bash scripts/ci/restore_external_dependencies.sh
+	echo '[Amethyst v$(VERSION)] deps - end'
+
+native: deps dep_mg
 	echo '[Amethyst v$(VERSION)] native - start'
 	mkdir -p $(WORKINGDIR)
 	cd $(WORKINGDIR) && cmake \
@@ -301,7 +311,7 @@ jre: native
 	cp $(WORKINGDIR)/libawt_xawt.dylib $(OUTPUTDIR)/java_runtimes/java-21-openjdk/lib
 	echo '[Amethyst v$(VERSION)] jre - end'
 
-dep_mg:
+dep_mg: deps
 	echo '[Amethyst v$(VERSION)] dep_mg - start'
 	mkdir -p $(WORKINGDIR)/mobileglues
 	cd $(WORKINGDIR)/mobileglues && cmake \
@@ -431,4 +441,4 @@ clean:
 
 		
 
-.PHONY: all clean check native java jre package dsym deploy help
+.PHONY: all clean check deps native java jre package dsym deploy help

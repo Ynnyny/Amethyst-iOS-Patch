@@ -19,6 +19,7 @@ enum class CompareOp : std::uint8_t {
     Less,
     LessEqual,
     Equal,
+    NotEqual,
     Greater,
     GreaterEqual,
     Always
