@@ -13,6 +13,7 @@ import java.nio.*;
 import javax.annotation.*;
 
 import net.kdt.pojavlaunch.Tools;
+import net.kdt.pojavlaunch.render.MetalCraftGLInterceptor;
 
 import org.lwjgl.*;
 import org.lwjgl.system.*;
@@ -939,6 +940,7 @@ public class GLFW
 
     public static void glfwSwapBuffers(@NativeType("GLFWwindow *") long window) {
         long __functionAddress = Functions.SwapBuffers;
+        MetalCraftGLInterceptor.endFrame();
         invokePV(window, __functionAddress);
     }
 
