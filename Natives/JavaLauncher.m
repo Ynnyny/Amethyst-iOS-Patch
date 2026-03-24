@@ -176,19 +176,6 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
         }
         NSString *backendRenderer = requestedRenderer;
         BOOL useMetalCraft = [requestedRenderer isEqualToString:@ RENDERER_NAME_METALCRAFT];
-        const char *forceMetalCraft = getenv("POJAV_ENABLE_METALCRAFT_EXPERIMENTAL");
-        BOOL allowMetalCraftExperimental = forceMetalCraft != NULL &&
-                                           strcmp(forceMetalCraft, "0") != 0;
-        if (useMetalCraft && !allowMetalCraftExperimental) {
-            requestedRenderer = @ RENDERER_NAME_METALCRAFT_BACKEND;
-            backendRenderer = requestedRenderer;
-            useMetalCraft = NO;
-            NSLog(
-                @"[JavaLauncher] MetalCraft sidecar is experimental and is temporarily "
-                 @"disabled by default; falling back to %@. Set "
-                 @"POJAV_ENABLE_METALCRAFT_EXPERIMENTAL=1 to force-enable it.",
-                requestedRenderer);
-        }
         if (useMetalCraft) {
             const char *existingBackendRenderer = getenv("POJAV_RENDERER_BACKEND");
             if (existingBackendRenderer != NULL &&
