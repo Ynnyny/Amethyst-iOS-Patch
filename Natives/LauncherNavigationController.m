@@ -37,10 +37,41 @@ static void *ProgressObserverContext = &ProgressObserverContext;
 @property(nonatomic) UIButton* buttonInstall;
 @property(nonatomic) UIBarButtonItem* buttonInstallItem;
 @property(nonatomic) int profileSelectedAt;
+@property(nonatomic) NSProgress* observedTaskProgress;
 
 @end
 
 @implementation LauncherNavigationController
+
+- (void)dealloc {
+    [self detachTaskProgressObserver];
+}
+
+- (void)attachTaskProgressObserver:(NSProgress *)progress {
+    if (progress == nil || self.observedTaskProgress == progress) {
+        return;
+    }
+
+    [self detachTaskProgressObserver];
+    self.observedTaskProgress = progress;
+    [progress addObserver:self
+               forKeyPath:@"fractionCompleted"
+                  options:NSKeyValueObservingOptionInitial
+                  context:ProgressObserverContext];
+}
+
+- (void)detachTaskProgressObserver {
+    if (self.observedTaskProgress == nil) {
+        return;
+    }
+
+    @try {
+        [self.observedTaskProgress removeObserver:self
+                                       forKeyPath:@"fractionCompleted"
+                                          context:ProgressObserverContext];
+    } @catch(id exception) {}
+    self.observedTaskProgress = nil;
+}
 
 - (void)viewDidLoad
 {
@@ -308,23 +339,29 @@ static void *ProgressObserverContext = &ProgressObserverContext;
         };
     }
 
-    self.task = [MinecraftResourceDownloadTask new];
+    MinecraftResourceDownloadTask *task = [MinecraftResourceDownloadTask new];
+    self.task = task;
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         __weak LauncherNavigationController *weakSelf = self;
-        self.task.handleError = ^{
+        task.handleError = ^{
             dispatch_async(dispatch_get_main_queue(), ^{
+                if (weakSelf.task != task) {
+                    return;
+                }
+                [weakSelf detachTaskProgressObserver];
+                weakSelf.progressViewMain.observedProgress = nil;
                 [weakSelf setInteractionEnabled:YES forDownloading:YES];
                 weakSelf.task = nil;
                 weakSelf.progressVC = nil;
             });
         };
-        [self.task downloadVersion:object];
+        [task downloadVersion:object];
         dispatch_async(dispatch_get_main_queue(), ^{
-            self.progressViewMain.observedProgress = self.task.progress;
-            [self.task.progress addObserver:self
-                forKeyPath:@"fractionCompleted"
-                options:NSKeyValueObservingOptionInitial
-                context:ProgressObserverContext];
+            if (weakSelf.task != task || task.failed || task.launchBlocked || task.progress == nil) {
+                return;
+            }
+            weakSelf.progressViewMain.observedProgress = task.progress;
+            [weakSelf attachTaskProgressObserver:task.progress];
         });
     });
 }
@@ -365,10 +402,19 @@ static void *ProgressObserverContext = &ProgressObserverContext;
     // Calculate download speed and ETA
     static CGFloat lastMsTime;
     static NSUInteger lastSecTime, lastCompletedUnitCount;
-    NSProgress *progress = self.task.textProgress;
+    MinecraftResourceDownloadTask *task = self.task;
+    NSProgress *downloadProgress = object;
+    if (task == nil || downloadProgress != self.observedTaskProgress) {
+        return;
+    }
+
+    NSProgress *progress = task.textProgress;
+    if (progress == nil) {
+        return;
+    }
     struct timeval tv;
     gettimeofday(&tv, NULL); 
-    NSInteger completedUnitCount = self.task.progress.totalUnitCount * self.task.progress.fractionCompleted;
+    NSInteger completedUnitCount = task.progress.totalUnitCount * task.progress.fractionCompleted;
     progress.completedUnitCount = completedUnitCount;
     if (lastSecTime < tv.tv_sec) {
         CGFloat currentTime = tv.tv_sec + tv.tv_usec / 1000000.0;
@@ -381,14 +427,24 @@ static void *ProgressObserverContext = &ProgressObserverContext;
     }
 
     dispatch_async(dispatch_get_main_queue(), ^{
+        if (self.task != task) {
+            return;
+        }
         self.progressText.text = progress.localizedAdditionalDescription;
 
         if (!progress.finished) return;
         [self.progressVC dismissModalViewControllerAnimated:NO];
 
+        [self detachTaskProgressObserver];
         self.progressViewMain.observedProgress = nil;
-        if (self.task.metadata) {
-            __block NSDictionary *metadata = self.task.metadata;
+        if (task.failed || task.launchBlocked || task.progress.cancelled) {
+            self.task = nil;
+            [self setInteractionEnabled:YES forDownloading:YES];
+            return;
+        }
+
+        if (task.metadata) {
+            __block NSDictionary *metadata = task.metadata;
             [self invokeAfterJITEnabled:^{
                 UIKit_launchMinecraftSurfaceVC(self.view.window, metadata);
             }];
@@ -405,24 +461,30 @@ static void *ProgressObserverContext = &ProgressObserverContext;
         return;
     }
     [self setInteractionEnabled:NO forDownloading:YES];
-    self.task = [MinecraftResourceDownloadTask new];
+    MinecraftResourceDownloadTask *task = [MinecraftResourceDownloadTask new];
+    self.task = task;
     NSDictionary *userInfo = notification.userInfo;
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         __weak LauncherNavigationController *weakSelf = self;
-        self.task.handleError = ^{
+        task.handleError = ^{
             dispatch_async(dispatch_get_main_queue(), ^{
+                if (weakSelf.task != task) {
+                    return;
+                }
+                [weakSelf detachTaskProgressObserver];
+                weakSelf.progressViewMain.observedProgress = nil;
                 [weakSelf setInteractionEnabled:YES forDownloading:YES];
                 weakSelf.task = nil;
                 weakSelf.progressVC = nil;
             });
         };
-        [self.task downloadModpackFromAPI:notification.object detail:userInfo[@"detail"] atIndex:[userInfo[@"index"] unsignedLongValue]];
+        [task downloadModpackFromAPI:notification.object detail:userInfo[@"detail"] atIndex:[userInfo[@"index"] unsignedLongValue]];
         dispatch_async(dispatch_get_main_queue(), ^{
-            self.progressViewMain.observedProgress = self.task.progress;
-            [self.task.progress addObserver:self
-                forKeyPath:@"fractionCompleted"
-                options:NSKeyValueObservingOptionInitial
-                context:ProgressObserverContext];
+            if (weakSelf.task != task || task.failed || task.progress == nil) {
+                return;
+            }
+            weakSelf.progressViewMain.observedProgress = task.progress;
+            [weakSelf attachTaskProgressObserver:task.progress];
         });
     });
 }

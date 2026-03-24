@@ -16,6 +16,10 @@
 
 @implementation MinecraftResourceDownloadTask
 
+- (BOOL)shouldAbortDownloadFlow {
+    return self.failed || self.launchBlocked || self.progress.cancelled;
+}
+
 - (instancetype)init {
     self = [super init];
     // TODO: implement background download
@@ -30,10 +34,14 @@
 
 // Add file to the queue
 - (NSURLSessionDownloadTask *)createDownloadTask:(NSString *)url size:(NSUInteger)size sha:(NSString *)sha altName:(NSString *)altName toPath:(NSString *)path success:(void (^)())success {
+    if ([self shouldAbortDownloadFlow]) {
+        return nil;
+    }
+
     BOOL fileExists = [NSFileManager.defaultManager fileExistsAtPath:path];
     // logSuccess?
     if (fileExists && [self checkSHA:sha forFile:path altName:altName]) {
-        if (success) success();
+        if (success && ![self shouldAbortDownloadFlow]) success();
         return nil;
     } else if (![self checkAccessWithDialog:YES]) {
         return nil;
@@ -54,7 +62,7 @@
         [NSFileManager.defaultManager removeItemAtPath:path error:nil];
         return [NSURL fileURLWithPath:path];
     } completionHandler:^(NSURLResponse * _Nonnull response, NSURL * _Nullable filePath, NSError * _Nullable error) {
-        if (self.progress.cancelled) {
+        if ([self shouldAbortDownloadFlow]) {
             // Ignore any further errors
         } else if (error != nil) {
             [self finishDownloadWithError:error file:name];
@@ -62,7 +70,7 @@
             [self finishDownloadWithErrorString:[NSString stringWithFormat:@"Failed to verify file %@: SHA1 mismatch", path.lastPathComponent]];
         } else {
             progress.totalUnitCount = progress.completedUnitCount;
-            if (success) success();
+            if (success && ![self shouldAbortDownloadFlow]) success();
         }
     }];
 
@@ -105,6 +113,9 @@
     version = (id)[MinecraftResourceUtils findVersion:versionStr inList:remoteVersionList];
 
     void(^completionBlock)(void) = ^{
+        if ([self shouldAbortDownloadFlow]) {
+            return;
+        }
         self.metadata = parseJSONFromFile(path);
         if (self.metadata[@"NSErrorObject"]) {
             [self finishDownloadWithErrorString:[self.metadata[@"NSErrorObject"] localizedDescription]];
@@ -118,7 +129,9 @@
             }
         }
         [MinecraftResourceUtils tweakVersionJson:self.metadata];
-        success();
+        if (![self shouldAbortDownloadFlow]) {
+            success();
+        }
     };
 
     if (!version) {
@@ -159,8 +172,13 @@
     NSString *sha = url.stringByDeletingLastPathComponent.lastPathComponent;
     NSUInteger size = [assetIndex[@"size"] unsignedLongLongValue];
     NSURLSessionDownloadTask *task = [self createDownloadTask:url size:size sha:sha altName:name toPath:path success:^{
+        if ([self shouldAbortDownloadFlow]) {
+            return;
+        }
         self.metadata[@"assetIndexObj"] = parseJSONFromFile(path);
-        success();
+        if (![self shouldAbortDownloadFlow]) {
+            success();
+        }
     }];
     [task resume];
 }
@@ -242,9 +260,21 @@
 - (void)downloadVersion:(NSDictionary *)version {
     [self prepareForDownload];
     [self downloadVersionMetadata:version success:^{
+        if ([self shouldAbortDownloadFlow]) {
+            return;
+        }
         [self downloadAssetMetadataWithSuccess:^{
+            if ([self shouldAbortDownloadFlow]) {
+                return;
+            }
             NSArray *libTasks = [self downloadClientLibraries];
+            if ([self shouldAbortDownloadFlow]) {
+                return;
+            }
             NSArray *assetTasks = [self downloadClientAssets];
+            if ([self shouldAbortDownloadFlow]) {
+                return;
+            }
             // Drop the 1 byte we set initially
             self.progress.totalUnitCount--;
             self.textProgress.totalUnitCount--;
@@ -287,6 +317,9 @@
 - (void)prepareForDownload {
     // Create a fake progress which is used to update completedUnitCount properly
     // (completedUnitCount does not update unless subprogress completes)
+    self.failed = NO;
+    self.launchBlocked = NO;
+    self.metadata = nil;
     self.textProgress = [NSProgress new];
     self.textProgress.kind = NSProgressKindFile;
     self.textProgress.fileOperationKind = NSProgressFileOperationKindDownloading;
@@ -300,10 +333,20 @@
 }
 
 - (void)finishDownloadWithErrorString:(NSString *)error {
+    if (self.failed) {
+        return;
+    }
+
+    self.failed = YES;
+    self.launchBlocked = YES;
+    self.metadata = nil;
     [self.progress cancel];
+    [self.textProgress cancel];
     [self.manager invalidateSessionCancelingTasks:YES resetSession:YES];
     showDialog(localize(@"Error", nil), error);
-    self.handleError();
+    if (self.handleError) {
+        self.handleError();
+    }
 }
 
 - (void)finishDownloadWithError:(NSError *)error file:(NSString *)file {
@@ -317,6 +360,7 @@
     // for now
     BOOL accessible = [BaseAuthenticator.current.authData[@"username"] hasPrefix:@"Demo."] || BaseAuthenticator.current.authData[@"xboxGamertag"] != nil;
     if (!accessible) {
+        self.launchBlocked = YES;
         [self.progress cancel];
         if (show) {
             [self finishDownloadWithErrorString:@"Minecraft can't be legally installed when logged in with a local account. Please switch to an online account to continue."];
