@@ -1,4 +1,5 @@
 #include "metalcraft/IRenderDevice.h"
+#include <memory>
 
 namespace metalcraft {
 

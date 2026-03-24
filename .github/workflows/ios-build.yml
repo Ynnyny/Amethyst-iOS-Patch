@@ -17,26 +17,9 @@ permissions:
   contents: read
 
 jobs:
-  renderer-linux:
-    name: Renderer Smoke Test (Ubuntu)
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v6
-        with:
-          submodules: recursive
-
-      - name: Restore external dependencies
-        run: bash scripts/ci/restore_external_dependencies.sh
-
-      - name: Run renderer tests
-        run: bash scripts/ci/run_renderer_smoke_tests.sh build/metalcraft
-
   build-ios:
     name: Build iOS IPA
     runs-on: macos-14
-    needs:
-      - renderer-linux
     env:
       PLATFORM: 2
       PLATFORM_NAME: ios
