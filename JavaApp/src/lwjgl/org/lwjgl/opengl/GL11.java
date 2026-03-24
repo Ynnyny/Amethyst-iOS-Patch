@@ -92,4 +92,19 @@ public class GL11 extends GL11C {
         }
         GL11C.glDeleteTextures(textures);
     }
+
+    public static String glGetString(int name) {
+        if (MetalCraftGLInterceptor.isActive()) {
+            if (name == 0x1F01) { // GL_RENDERER
+                return "MetalCraft Native Pipeline (Apple GPU)";
+            }
+            if (name == 0x1F00) { // GL_VENDOR
+                return "Amethyst-iOS";
+            }
+            if (name == 0x1F02) { // GL_VERSION
+                return "4.1 MetalCraft";
+            }
+        }
+        return GL11C.glGetString(name);
+    }
 }
