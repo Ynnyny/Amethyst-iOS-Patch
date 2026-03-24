@@ -265,6 +265,9 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     //margv[++margc] = "-Dorg.lwjgl.util.NoChecks=true";
     margv[++margc] = "-Dlog4j2.formatMsgNoLookups=true";
 
+    // Bypass Sodium's PojavLauncher/Amethyst detection to prevent crash
+    margv[++margc] = "-Dsodium.checks.issue2561=false";
+
     NSString *libjlipath8 = [NSString stringWithFormat:@"%@/lib/jli/libjli.dylib", javaHome]; // java 8
     NSString *libjlipath11 = [NSString stringWithFormat:@"%@/lib/libjli.dylib", javaHome]; // java 11+
     BOOL isJava8 = [fm fileExistsAtPath:libjlipath8];
