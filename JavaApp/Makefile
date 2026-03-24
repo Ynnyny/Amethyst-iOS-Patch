@@ -10,6 +10,8 @@ TARGETS := $(TARGETS:$(SOURCEDIR)/%=$(OUTPUTDIR)/%.jar)
 
 # Add all jars to classpath and allow compiling with private API
 JCFLAGS := -cp "$(subst $() $(),:,$(wildcard $(SOURCEDIR)/*/):$(wildcard libs/*/*.jar))" -XDignore.symbol.file
+JAVAC_VERSION := $(shell $(BOOTJDK)/javac -version 2>&1)
+JAVAC_MAJOR := $(shell printf '%s\n' "$(JAVAC_VERSION)" | sed -E 's/^javac 1\\.([0-9]+).*/\1/; s/^javac ([0-9]+).*/\1/')
 
 all: $(TARGETS)
 	
@@ -35,8 +37,15 @@ $(CLASSES): $(OUTPUTDIR)/%.class: $(SOURCEDIR)/%.java
 	mkdir -p "$$STAGEDIR"; \
 	mkdir -p "$(OUTPUTDIR)/classes/$$PACKAGE_DIR"; \
 	mkdir -p "$(dir $@)"; \
+	PATCH_MODULE_FLAGS=""; \
+	case "$<" in \
+		$(SOURCEDIR)/runtime_patches/*) \
+			if [ "$(JAVAC_MAJOR)" != "8" ]; then \
+				PATCH_MODULE_FLAGS="--patch-module=java.base=$(SOURCEDIR)/runtime_patches"; \
+			fi ;; \
+	esac; \
 	echo "Compiling $<"; \
-	$(BOOTJDK)/javac $(JCFLAGS) -d "$$STAGEDIR" $<; \
+	$(BOOTJDK)/javac $(JCFLAGS) $$PATCH_MODULE_FLAGS -d "$$STAGEDIR" $<; \
 	cp "$$STAGEDIR/$$PACKAGE_DIR$$CLASS_BASENAME"*.class "$(OUTPUTDIR)/classes/$$PACKAGE_DIR"; \
 	cp "$$STAGEDIR/$$PACKAGE_DIR$$CLASS_BASENAME"*.class "$(dir $@)/"; \
 	rm -rf "$$STAGEDIR"
@@ -59,6 +68,11 @@ $(OUTPUTDIR)/patchjna_agent.jar: $(CLASSES)
 	@mv $(basename $@)/com/sun/jna/Platform.class $(basename $@)/com/sun/jna/Platform.class.patch
 	@echo "Creating $@"
 	@$(BOOTJDK)/jar -cfm $@ $(SOURCEDIR)/patchjna_agent.txt -C $(basename $@) .
+
+$(OUTPUTDIR)/runtime_patches.jar: $(CLASSES) check_empty_classes
+	@set -e
+	@echo "Creating $@"
+	@$(BOOTJDK)/jar -cf $@ -C $(basename $@) .
 
 clean:
 	rm -rf $(OUTPUTDIR)

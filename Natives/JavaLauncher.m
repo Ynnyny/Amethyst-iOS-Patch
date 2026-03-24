@@ -295,6 +295,13 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
                           .UTF8String;
 
     NSString *librariesPath = [NSString stringWithFormat:@"%@/libs", NSBundle.mainBundle.bundlePath];
+    NSString *runtimePatchesPath = [librariesPath stringByAppendingPathComponent:@"runtime_patches.jar"];
+    if (!isJava8 && [fm fileExistsAtPath:runtimePatchesPath]) {
+        margv[++margc] =
+            [NSString stringWithFormat:@"--patch-module=java.base=%@", runtimePatchesPath]
+                .UTF8String;
+        NSLog(@"[JavaLauncher] Applying runtime patch module: %@", runtimePatchesPath);
+    }
     margv[++margc] = [NSString stringWithFormat:@"-javaagent:%@/patchjna_agent.jar=", librariesPath].UTF8String;
     if(getPrefBool(@"general.cosmetica")) {
         margv[++margc] = [NSString stringWithFormat:@"-javaagent:%@/arc_dns_injector.jar=23.95.137.176", librariesPath].UTF8String;
