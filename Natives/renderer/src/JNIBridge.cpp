@@ -292,6 +292,36 @@ bool populateDescriptorShaders(const StateSnapshot& snapshot, PipelineDescriptor
     return true;
 }
 
+bool prepareRenderStateLocked(IRenderDevice& device) {
+    const StateSnapshot snapshot = GetSharedStateTracker().snapshot();
+    const BoundRenderState currentState = device.currentRenderState();
+    if (currentState.valid() && currentState.snapshot == snapshot) {
+        return true;
+    }
+
+    PipelineDescriptor descriptor{};
+    descriptor.snapshot = snapshot;
+    descriptor.key = GetSharedStateTracker().currentPipelineKey();
+    if (!populateDescriptorShaders(snapshot, descriptor)) {
+        return false;
+    }
+
+    BoundRenderState nextState{};
+    nextState.snapshot = snapshot;
+    nextState.pipelineHandle = device.acquirePipeline(descriptor);
+    if (nextState.pipelineHandle == 0) {
+        return false;
+    }
+
+    nextState.depthStencilHandle = device.acquireDepthStencilState(snapshot.depth);
+    if (nextState.depthStencilHandle == 0) {
+        return false;
+    }
+
+    device.bindRenderState(nextState);
+    return true;
+}
+
 } // namespace detail
 
 StateTracker& GetSharedStateTracker() {
@@ -387,14 +417,10 @@ jlong MetalCraftJNI_AcquireCurrentPipeline() {
         return 0;
     }
 
-    metalcraft::PipelineDescriptor descriptor{};
-    descriptor.snapshot = metalcraft::GetSharedStateTracker().snapshot();
-    descriptor.key = metalcraft::GetSharedStateTracker().currentPipelineKey();
-    if (!metalcraft::detail::populateDescriptorShaders(descriptor.snapshot, descriptor)) {
+    if (!metalcraft::detail::prepareRenderStateLocked(*device)) {
         return 0;
     }
-
-    return static_cast<jlong>(device->acquirePipeline(descriptor));
+    return static_cast<jlong>(device->currentRenderState().pipelineHandle);
 }
 
 jlong MetalCraftJNI_CurrentPipelineHash() {
@@ -426,6 +452,9 @@ void MetalCraftJNI_Draw(jint topology, jint vertexStart, jint vertexCount, jint 
 
     auto& device = metalcraft::detail::deviceStorage();
     if (device) {
+        if (!metalcraft::detail::prepareRenderStateLocked(*device)) {
+            return;
+        }
         metalcraft::DrawCallInfo info{};
         info.topology = metalcraft::detail::toTopology(topology);
         info.vertexStart = static_cast<std::uint32_t>(vertexStart);
@@ -444,6 +473,9 @@ void MetalCraftJNI_DrawIndexed(jint topology, jint indexCount, jlong indexBuffer
 
     auto& device = metalcraft::detail::deviceStorage();
     if (device) {
+        if (!metalcraft::detail::prepareRenderStateLocked(*device)) {
+            return;
+        }
         metalcraft::DrawCallInfo info{};
         info.topology = metalcraft::detail::toTopology(topology);
         info.indexCount = static_cast<std::uint32_t>(indexCount);
@@ -461,6 +493,9 @@ jboolean MetalCraftJNI_DrawMulti(jint topology, jlong commandsPtr, jint drawCoun
 
     auto& device = metalcraft::detail::deviceStorage();
     if (!device || !device->supportsIndirectDraw()) {
+        return JNI_FALSE;
+    }
+    if (!metalcraft::detail::prepareRenderStateLocked(*device)) {
         return JNI_FALSE;
     }
 

@@ -18,6 +18,8 @@ public:
     virtual TexturePtr createTexture(const TextureDescriptor& descriptor) = 0;
     virtual std::uint64_t acquirePipeline(const PipelineDescriptor& descriptor) = 0;
     virtual std::uint64_t acquireDepthStencilState(const DepthState& state) = 0;
+    virtual void bindRenderState(const BoundRenderState& state) = 0;
+    virtual BoundRenderState currentRenderState() const noexcept = 0;
     virtual bool writeRing(std::size_t size, std::size_t alignment, RingAllocation& allocation) = 0;
     virtual void beginFrame() = 0;
     virtual void endFrame() = 0;

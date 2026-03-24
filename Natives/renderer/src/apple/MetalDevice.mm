@@ -107,6 +107,14 @@ public:
         return MetalDepthStencilManagerAcquire(depthStencilManagerHandle_, state);
     }
 
+    void bindRenderState(const BoundRenderState& state) override {
+        currentRenderState_ = state;
+    }
+
+    BoundRenderState currentRenderState() const noexcept override {
+        return currentRenderState_;
+    }
+
     bool writeRing(std::size_t size, std::size_t alignment, RingAllocation& allocation) override {
         if (uploadBufferHandle_ == nullptr || size == 0 || size > ringBufferCapacity_) {
             return false;
@@ -145,16 +153,22 @@ public:
 
     void draw(const DrawCallInfo& info) override {
         (void)info;
+        if (!currentRenderState_.valid()) {
+            return;
+        }
         ++drawCallCount_;
     }
 
     void drawIndexed(const DrawCallInfo& info) override {
         (void)info;
+        if (!currentRenderState_.valid()) {
+            return;
+        }
         ++drawCallCount_;
     }
 
     void drawIndirect(const IndirectDrawBatch& batch) override {
-        if (batch.commands == nullptr || batch.commandCount == 0) {
+        if (!currentRenderState_.valid() || batch.commands == nullptr || batch.commandCount == 0) {
             return;
         }
         drawCallCount_ += batch.commandCount;
@@ -187,6 +201,7 @@ private:
     void* pipelineManagerHandle_ = nullptr;
     void* depthStencilManagerHandle_ = nullptr;
     void* commandEncoderHandle_ = nullptr;
+    BoundRenderState currentRenderState_{};
     std::size_t ringBufferCapacity_ = 0;
     std::size_t ringOffset_ = 0;
     std::size_t drawCallCount_ = 0;

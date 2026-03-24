@@ -159,6 +159,16 @@ struct PipelineDescriptor {
     std::string fragmentMSL{};
 };
 
+struct BoundRenderState {
+    std::uint64_t pipelineHandle = 0;
+    std::uint64_t depthStencilHandle = 0;
+    StateSnapshot snapshot{};
+
+    bool valid() const noexcept {
+        return pipelineHandle != 0;
+    }
+};
+
 struct RingAllocation {
     std::size_t offset = 0;
     std::size_t size = 0;

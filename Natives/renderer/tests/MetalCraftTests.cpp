@@ -12,6 +12,22 @@
 int main() {
     using namespace metalcraft;
 
+    const char* vertexSource = R"(#version 450 core
+layout(location = 0) in vec3 aPos;
+layout(location = 1) in vec2 aUv;
+layout(location = 0) out vec2 vUv;
+void main() {
+    vUv = aUv;
+	gl_Position = vec4(aPos, 1.0);
+})";
+
+    const char* fragmentSource = R"(#version 450 core
+layout(location = 0) out vec4 fragColor;
+layout(location = 0) in vec2 vUv;
+void main() {
+    fragColor = vec4(vUv, 0.5, 1.0);
+})";
+
     // ====== Test 1-2: State Tracker Hash ======
     StateTracker tracker;
     const std::uint64_t baseHash = tracker.currentPipelineKey().value;
@@ -130,6 +146,16 @@ int main() {
     if (jniBaseHash == jniMutatedHash) {
         return 17;
     }
+    if (MetalCraftJNI_RegisterShaderSource(
+            101, static_cast<jint>(ShaderStage::Vertex), vertexSource,
+            JNI_FALSE) == JNI_FALSE) {
+        return 61;
+    }
+    if (MetalCraftJNI_RegisterShaderSource(
+            202, static_cast<jint>(ShaderStage::Fragment), fragmentSource,
+            JNI_FALSE) == JNI_FALSE) {
+        return 62;
+    }
 
     // ====== Test 18-20: Texture Creation ======
     TextureDescriptor texDesc{};
@@ -184,6 +210,17 @@ int main() {
         return 59;
     }
 
+    BoundRenderState boundState{};
+    boundState.pipelineHandle = pipelineC;
+    boundState.depthStencilHandle = dsA;
+    boundState.snapshot = descriptor.snapshot;
+    device->bindRenderState(boundState);
+    const BoundRenderState currentState = device->currentRenderState();
+    if (!currentState.valid() || currentState.pipelineHandle != pipelineC ||
+        currentState.depthStencilHandle != dsA) {
+        return 60;
+    }
+
     // ====== Test 25-27: Draw Call Tracking ======
     device->beginFrame();
     if (device->drawCallCount() != 0) {
@@ -228,6 +265,9 @@ int main() {
 
     // ====== Test 28-31: JNI Frame & Draw ======
     MetalCraftJNI_BeginFrame();
+    if (MetalCraftJNI_AcquireCurrentPipeline() == 0) {
+        return 63;
+    }
     MetalCraftJNI_Draw(static_cast<jint>(PrimitiveTopology::Triangles), 0, 36, 1);
     MetalCraftJNI_DrawIndexed(static_cast<jint>(PrimitiveTopology::Triangles), 36, 0, 1);
     if (MetalCraftJNI_GetDrawCallCount() != 2) {
@@ -361,15 +401,7 @@ int main() {
 #ifdef METALCRAFT_HAS_SHADER_TRANSLATOR
     ShaderTranslator translator;
     const ShaderTranslationResult vertexTranslation = translator.translateToMSL(
-        ShaderStage::Vertex,
-        R"(#version 450 core
-layout(location = 0) in vec3 aPos;
-layout(location = 1) in vec2 aUv;
-layout(location = 0) out vec2 vUv;
-void main() {
-    vUv = aUv;
-	gl_Position = vec4(aPos, 1.0);
-    })");
+        ShaderStage::Vertex, vertexSource);
     if (!vertexTranslation.succeeded || vertexTranslation.output.spirv.empty()) {
         return 40;
     }
@@ -383,23 +415,8 @@ void main() {
         return 42;
     }
 
-    const char* fragmentSource = R"(#version 450 core
-layout(location = 0) out vec4 fragColor;
-layout(location = 0) in vec2 vUv;
-void main() {
-    fragColor = vec4(vUv, 0.5, 1.0);
-})";
-
     if (MetalCraftJNI_RegisterShaderSource(
-            501, static_cast<jint>(ShaderStage::Vertex),
-            R"(#version 450 core
-layout(location = 0) in vec3 aPos;
-layout(location = 1) in vec2 aUv;
-layout(location = 0) out vec2 vUv;
-void main() {
-    vUv = aUv;
-	gl_Position = vec4(aPos, 1.0);
-})",
+            501, static_cast<jint>(ShaderStage::Vertex), vertexSource,
             JNI_FALSE) == JNI_FALSE) {
         return 43;
     }

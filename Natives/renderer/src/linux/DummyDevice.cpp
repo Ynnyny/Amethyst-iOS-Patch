@@ -49,6 +49,14 @@ public:
         return h;
     }
 
+    void bindRenderState(const BoundRenderState& state) override {
+        currentRenderState_ = state;
+    }
+
+    BoundRenderState currentRenderState() const noexcept override {
+        return currentRenderState_;
+    }
+
     bool writeRing(std::size_t size, std::size_t alignment, RingAllocation& allocation) override {
         return ringBuffer_.allocate(size, alignment, allocation);
     }
@@ -62,16 +70,22 @@ public:
 
     void draw(const DrawCallInfo& info) override {
         (void)info;
+        if (!currentRenderState_.valid()) {
+            return;
+        }
         ++drawCallCount_;
     }
 
     void drawIndexed(const DrawCallInfo& info) override {
         (void)info;
+        if (!currentRenderState_.valid()) {
+            return;
+        }
         ++drawCallCount_;
     }
 
     void drawIndirect(const IndirectDrawBatch& batch) override {
-        if (batch.commands == nullptr || batch.commandCount == 0) {
+        if (!currentRenderState_.valid() || batch.commands == nullptr || batch.commandCount == 0) {
             return;
         }
         drawCallCount_ += batch.commandCount;
@@ -99,6 +113,7 @@ private:
     RingBuffer ringBuffer_;
     std::unordered_map<std::uint64_t, std::uint64_t> pipelineCache_;
     std::unordered_map<std::uint64_t, std::uint64_t> depthStencilCache_;
+    BoundRenderState currentRenderState_{};
     std::uint64_t nextPipelineId_ = 1;
     std::size_t drawCallCount_ = 0;
 };
