@@ -74,8 +74,12 @@ static GameSurfaceView* pojavWindow;
     [super viewDidLoad];
     isControlModifiable = NO;
     self.isMacCatalystApp = NSProcessInfo.processInfo.isMacCatalystApp;
-    // Load MetalHUD library
-    dlopen("/usr/lib/libMTLHud.dylib", 0);
+    if (@available(iOS 16, tvOS 16, *)) {
+        if (getPrefBool(@"video.performance_hud") &&
+            [CAMetalLayer instancesRespondToSelector:@selector(developerHUDProperties)]) {
+            dlopen("/usr/lib/libMTLHud.dylib", RTLD_LAZY);
+        }
+    }
 
     self.lightHaptic = [[UIImpactFeedbackGenerator alloc] initWithStyle:(UIImpactFeedbackStyleLight)];
     self.mediumHaptic = [[UIImpactFeedbackGenerator alloc] initWithStyle:(UIImpactFeedbackStyleMedium)];
