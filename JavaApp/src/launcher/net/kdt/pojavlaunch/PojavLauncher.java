@@ -91,6 +91,11 @@ public class PojavLauncher {
             }
         }
 
+        // Bypass Sodium's PojavLauncher/Amethyst detection to prevent crash
+        // Sodium scans stack traces for "net.kdt.pojavlaunch" and checks these properties
+        System.setProperty("sodium.checks.issue2561", "false");
+        System.setProperty("sodium.checks.environment", "false");
+
         System.setProperty("org.lwjgl.vulkan.libname", "libMoltenVK.dylib");
         MetalCraftBridge.bootstrapRequestedRenderer();
         MetalCraftGLInterceptor.bootstrap();

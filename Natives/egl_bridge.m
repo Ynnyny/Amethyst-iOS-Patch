@@ -118,7 +118,9 @@ int pojavInitOpenGL() {
         setenv("POJAV_RENDERER_BACKEND", renderer.UTF8String, 1);
         set_osm_bridge_tbl();
     }
-    JNI_LWJGL_changeRenderer(renderer.UTF8String);
+    if (!useMetalCraft) {
+        JNI_LWJGL_changeRenderer(renderer.UTF8String);
+    }
     // Preload renderer library
     dlopen([NSString stringWithFormat:@"@rpath/%@", renderer].UTF8String, RTLD_GLOBAL);
     if (useMetalCraft) {
