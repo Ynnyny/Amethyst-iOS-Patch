@@ -127,7 +127,6 @@ public final class Platform {
         // so we must trick them into NOT forcefully disabling it
         try {
             Class caller = (Class)stackWalkerGetCaller.invoke(stackWalker);
-            System.out.println("Platform.isMac called from " + caller.getName());
             return !matchingClasses.contains(caller);
         } catch (Throwable e) {
             // We're calling a public method, this should never happen

@@ -52,6 +52,51 @@ public final class Tools {
     public static final String ASSETS_PATH = DIR_GAME_NEW + "/assets";
     public static final String OBSOLETE_RESOURCES_PATH=DIR_GAME_NEW + "/resources";
 
+    private static boolean isOfflineAccount(MinecraftAccount profile) {
+        if (profile == null) {
+            return false;
+        }
+
+        String accessToken = profile.accessToken;
+        if (accessToken != null && accessToken.equalsIgnoreCase("offline")) {
+            return true;
+        }
+
+        String clientToken = profile.clientToken;
+        if (clientToken != null && clientToken.equalsIgnoreCase("offline")) {
+            return true;
+        }
+
+        String xuid = profile.xuid;
+        return xuid != null && xuid.startsWith("offline:");
+    }
+
+    private static String[] stripOfflineOnlyOnlineArgs(String[] args, boolean offlineAccount) {
+        if (!offlineAccount || args.length == 0) {
+            return args;
+        }
+
+        List<String> filteredArgs = new ArrayList<String>(args.length);
+        boolean skipNextValue = false;
+        for (int i = 0; i < args.length; i++) {
+            String arg = args[i];
+            if (skipNextValue) {
+                skipNextValue = false;
+                continue;
+            }
+
+            if ("--xuid".equals(arg)) {
+                if (i + 1 < args.length && !args[i + 1].startsWith("--")) {
+                    skipNextValue = true;
+                }
+                continue;
+            }
+
+            filteredArgs.add(arg);
+        }
+        return filteredArgs.toArray(new String[0]);
+    }
+
     public static void launchMinecraft(MinecraftAccount profile, final JMinecraftVersionList.Version versionInfo) throws Throwable {
         String[] launchArgs = getMinecraftArgs(profile, versionInfo);
         // System.out.println("Minecraft Args: " + Arrays.toString(launchArgs));
@@ -78,6 +123,7 @@ public final class Tools {
 
     public static String[] getMinecraftArgs(MinecraftAccount profile, JMinecraftVersionList.Version versionInfo) {
         String username = profile.username.replace("Demo.", "");
+        boolean offlineAccount = isOfflineAccount(profile);
         String versionName = versionInfo.id;
         if (versionInfo.inheritsFrom != null) {
             versionName = versionInfo.inheritsFrom;
@@ -91,14 +137,14 @@ public final class Tools {
         varArgMap.put("auth_access_token", profile.accessToken);
         varArgMap.put("auth_player_name", username);
         varArgMap.put("auth_uuid", profile.profileId.replace("-", ""));
-        varArgMap.put("auth_xuid", profile.xuid);
+        varArgMap.put("auth_xuid", offlineAccount ? "" : profile.xuid);
         varArgMap.put("assets_root", Tools.ASSETS_PATH);
         varArgMap.put("assets_index_name", versionInfo.assets);
         varArgMap.put("clientid", profile.clientToken);
         varArgMap.put("game_assets", Tools.ASSETS_PATH);
         varArgMap.put("game_directory", gameDir.getAbsolutePath());
         varArgMap.put("user_properties", "{}");
-        varArgMap.put("user_type", "mojang");
+        varArgMap.put("user_type", offlineAccount ? "legacy" : "mojang");
         varArgMap.put("version_name", versionName);
         varArgMap.put("version_type", versionInfo.type);
         varArgMap.put("natives_directory", System.getProperty("java.library.path"));
@@ -109,7 +155,7 @@ public final class Tools {
             for (Object arg : versionInfo.arguments.game) {
                 if (arg instanceof String) {
                     minecraftArgs.add((String) arg);
-                    if (arg.equals("--xuid")) {
+                    if (!offlineAccount && arg.equals("--xuid")) {
                         varArgMap.put("user_type", "msa");
                     }
                 } else {
@@ -137,6 +183,7 @@ public final class Tools {
                 profile
             ), varArgMap
         );
+        argsFromJson = stripOfflineOnlyOnlineArgs(argsFromJson, offlineAccount);
         // Tools.dialogOnUiThread(this, "Result args", Arrays.asList(argsFromJson).toString());
         return argsFromJson;
     }
