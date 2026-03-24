@@ -10,8 +10,7 @@ TARGETS := $(TARGETS:$(SOURCEDIR)/%=$(OUTPUTDIR)/%.jar)
 
 # Add all jars to classpath and allow compiling with private API
 JCFLAGS := -cp "$(subst $() $(),:,$(wildcard $(SOURCEDIR)/*/):$(wildcard libs/*/*.jar))" -XDignore.symbol.file
-JAVAC_VERSION := $(shell $(BOOTJDK)/javac -version 2>&1)
-JAVAC_MAJOR := $(shell printf '%s\n' "$(JAVAC_VERSION)" | sed -E 's/^javac 1\\.([0-9]+).*/\1/; s/^javac ([0-9]+).*/\1/')
+JAVAC_SUPPORTS_PATCH_MODULE := $(shell { $(BOOTJDK)/javac --help-extra 2>&1 || true; } | grep -q -- '--patch-module' && echo 1 || echo 0)
 
 all: $(TARGETS)
 	
@@ -40,7 +39,7 @@ $(CLASSES): $(OUTPUTDIR)/%.class: $(SOURCEDIR)/%.java
 	PATCH_MODULE_FLAGS=""; \
 	case "$<" in \
 		$(SOURCEDIR)/runtime_patches/*) \
-			if [ "$(JAVAC_MAJOR)" != "8" ]; then \
+			if [ "$(JAVAC_SUPPORTS_PATCH_MODULE)" = "1" ]; then \
 				PATCH_MODULE_FLAGS="--patch-module=java.base=$(SOURCEDIR)/runtime_patches"; \
 			fi ;; \
 	esac; \
