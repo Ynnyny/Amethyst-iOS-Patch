@@ -64,13 +64,6 @@ if(METALCRAFT_ENABLE_SHADER_TRANSLATOR)
   add_subdirectory("${METALCRAFT_SPIRVCROSS_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/spirv-cross" EXCLUDE_FROM_ALL)
 endif()
 
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-  list(APPEND METALCRAFT_CORE_SOURCES
-    src/linux/DummyBuffer.cpp
-    src/linux/DummyDevice.cpp
-    src/linux/DummyTexture.cpp
-  )
-endif()
 
 add_library(MetalCraftCore STATIC ${METALCRAFT_CORE_SOURCES})
 target_compile_features(MetalCraftCore PUBLIC cxx_std_17)
@@ -120,8 +113,3 @@ if(APPLE)
   )
 endif()
 
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND METALCRAFT_BUILD_TESTS)
-  add_executable(MetalCraftTests tests/MetalCraftTests.cpp)
-  target_link_libraries(MetalCraftTests PRIVATE MetalCraftCore)
-  add_test(NAME MetalCraftTests COMMAND MetalCraftTests)
-endif()
