@@ -265,6 +265,10 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     //margv[++margc] = "-Dorg.lwjgl.util.NoChecks=true";
     margv[++margc] = "-Dlog4j2.formatMsgNoLookups=true";
 
+    NSString *libjlipath8 = [NSString stringWithFormat:@"%@/lib/jli/libjli.dylib", javaHome]; // java 8
+    NSString *libjlipath11 = [NSString stringWithFormat:@"%@/lib/libjli.dylib", javaHome]; // java 11+
+    BOOL isJava8 = [fm fileExistsAtPath:libjlipath8];
+
     // Preset OpenGL libname
     const char *glLibName = getenv("POJAV_RENDERER_BACKEND");
     if (!glLibName) {
@@ -320,9 +324,6 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     margv[++margc] = "-Dfml.earlyprogresswindow=false";
 
     // Load java
-    NSString *libjlipath8 = [NSString stringWithFormat:@"%@/lib/jli/libjli.dylib", javaHome]; // java 8
-    NSString *libjlipath11 = [NSString stringWithFormat:@"%@/lib/libjli.dylib", javaHome]; // java 11+
-    BOOL isJava8 = [fm fileExistsAtPath:libjlipath8];
     setenv("INTERNAL_JLI_PATH", (isJava8 ? libjlipath8 : libjlipath11).UTF8String, 1);
     void* libjli = dlopen(getenv("INTERNAL_JLI_PATH"), RTLD_GLOBAL);
 
