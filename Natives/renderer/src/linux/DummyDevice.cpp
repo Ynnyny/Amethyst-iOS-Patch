@@ -88,7 +88,13 @@ public:
         if (!currentRenderState_.valid() || batch.commands == nullptr || batch.commandCount == 0) {
             return;
         }
-        drawCallCount_ += batch.commandCount;
+        for (std::size_t index = 0; index < batch.commandCount; ++index) {
+            const IndirectDrawArraysCommand& command = batch.commands[index];
+            if (command.vertexCount == 0 || command.instanceCount == 0) {
+                continue;
+            }
+            ++drawCallCount_;
+        }
     }
 
     void submit() override {}

@@ -24,6 +24,7 @@ set(METALCRAFT_GLSLANG_DIR "${METALCRAFT_EXTERNAL_DIR}/3rdparty/glslang")
 set(METALCRAFT_SPIRVCROSS_DIR "${METALCRAFT_EXTERNAL_DIR}/3rdparty/SPIRV-Cross")
 
 set(METALCRAFT_CORE_SOURCES
+  src/IndirectCommandStream.cpp
   src/JNIBridge.cpp
   src/RenderDeviceFactory.cpp
   src/RingBuffer.cpp

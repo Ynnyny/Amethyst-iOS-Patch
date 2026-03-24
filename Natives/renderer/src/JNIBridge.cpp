@@ -1,15 +1,15 @@
 #include "metalcraft/JNIBridge.h"
+#include "metalcraft/IndirectCommandStream.h"
 #include "metalcraft/IRenderDevice.h"
 #ifdef METALCRAFT_HAS_SHADER_TRANSLATOR
 #include "metalcraft/ShaderTranslator.h"
 #endif
 
 #include <cctype>
-#include <cstring>
+#include <cstdint>
 #include <mutex>
 #include <string>
 #include <unordered_map>
-#include <vector>
 
 namespace metalcraft {
 namespace detail {
@@ -502,21 +502,28 @@ jboolean MetalCraftJNI_DrawMulti(jint topology, jlong commandsPtr, jint drawCoun
     const std::size_t commandStride =
         stride <= 0 ? sizeof(metalcraft::IndirectDrawArraysCommand)
                     : static_cast<std::size_t>(stride);
-    const auto* base = reinterpret_cast<const std::uint8_t*>(commandsPtr);
-    std::vector<metalcraft::IndirectDrawArraysCommand> commands;
-    commands.reserve(static_cast<std::size_t>(drawCount));
-
-    for (jint index = 0; index < drawCount; ++index) {
-        const auto* command = reinterpret_cast<const metalcraft::IndirectDrawArraysCommand*>(
-            base + static_cast<std::size_t>(index) * commandStride);
-        commands.push_back(*command);
+    metalcraft::PreparedIndirectCommands prepared{};
+    const auto allocator = [&device](std::size_t size, std::size_t alignment,
+                                     metalcraft::RingAllocation& allocation) {
+        return device->writeRing(size, alignment, allocation);
+    };
+    const void* commandSource =
+        reinterpret_cast<const void*>(static_cast<std::uintptr_t>(commandsPtr));
+    if (!metalcraft::PrepareIndirectCommands(commandSource,
+                                             static_cast<std::size_t>(drawCount),
+                                             commandStride, allocator, prepared)) {
+        return JNI_FALSE;
     }
 
     metalcraft::IndirectDrawBatch batch{};
     batch.topology = metalcraft::detail::toTopology(topology);
-    batch.commands = commands.data();
-    batch.commandCount = commands.size();
-    batch.stride = commandStride;
+    batch.commands = prepared.commands;
+    batch.commandCount = prepared.commandCount;
+    batch.stride = prepared.stride;
+    batch.byteLength = prepared.byteLength;
+    batch.ringOffset = prepared.ringOffset;
+    batch.stagedInRing = prepared.stagedInRing;
+    batch.zeroCopy = prepared.zeroCopy;
     device->drawIndirect(batch);
     return JNI_TRUE;
 }

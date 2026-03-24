@@ -203,6 +203,10 @@ struct IndirectDrawBatch {
     const IndirectDrawArraysCommand* commands = nullptr;
     std::size_t commandCount = 0;
     std::size_t stride = sizeof(IndirectDrawArraysCommand);
+    std::size_t byteLength = 0;
+    std::size_t ringOffset = 0;
+    bool stagedInRing = false;
+    bool zeroCopy = false;
 };
 
 } // namespace metalcraft

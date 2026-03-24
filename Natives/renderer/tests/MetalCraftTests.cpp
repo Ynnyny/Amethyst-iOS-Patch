@@ -1,3 +1,4 @@
+#include "metalcraft/IndirectCommandStream.h"
 #include "metalcraft/IRenderDevice.h"
 #include "metalcraft/ITexture.h"
 #include "metalcraft/JNIBridge.h"
@@ -8,6 +9,7 @@
 #include <array>
 #include <cstdint>
 #include <cstring>
+#include <vector>
 
 int main() {
     using namespace metalcraft;
@@ -72,7 +74,55 @@ void main() {
         return 8;
     }
 
-    // ====== Test 9: Device Creation ======
+    // ====== Test 9-10: Indirect Command Packing ======
+    PreparedIndirectCommands zeroCopyPrepared{};
+    IndirectDrawArraysCommand contiguousCommands[] = {
+        {5, 1, 2, 0},
+        {7, 3, 9, 4},
+    };
+    if (!PrepareIndirectCommands(
+            contiguousCommands, 2, sizeof(IndirectDrawArraysCommand),
+            [](std::size_t, std::size_t, RingAllocation&) { return false; },
+            zeroCopyPrepared)) {
+        return 64;
+    }
+    if (!zeroCopyPrepared.zeroCopy || zeroCopyPrepared.stagedInRing ||
+        zeroCopyPrepared.commands != contiguousCommands ||
+        zeroCopyPrepared.byteLength != sizeof(contiguousCommands)) {
+        return 65;
+    }
+
+    struct StridedIndirectCommand {
+        IndirectDrawArraysCommand command{};
+        std::uint32_t padding = 0;
+    };
+    RingBuffer indirectRing(128);
+    std::array<StridedIndirectCommand, 2> stridedCommands = {{
+        {{11, 1, 0, 0}, 0xA5A5A5A5U},
+        {{13, 2, 11, 5}, 0x5A5A5A5AU},
+    }};
+    PreparedIndirectCommands stagedPrepared{};
+    if (!PrepareIndirectCommands(
+            stridedCommands.data(), stridedCommands.size(), sizeof(StridedIndirectCommand),
+            [&indirectRing](std::size_t size, std::size_t alignment, RingAllocation& allocation) {
+                return indirectRing.allocate(size, alignment, allocation);
+            },
+            stagedPrepared)) {
+        return 66;
+    }
+    if (stagedPrepared.zeroCopy || !stagedPrepared.stagedInRing ||
+        stagedPrepared.stride != sizeof(IndirectDrawArraysCommand) ||
+        stagedPrepared.byteLength != stridedCommands.size() * sizeof(IndirectDrawArraysCommand) ||
+        stagedPrepared.ringOffset != 0) {
+        return 67;
+    }
+    if (stagedPrepared.commands[0].vertexCount != 11 ||
+        stagedPrepared.commands[1].vertexCount != 13 ||
+        stagedPrepared.commands[1].baseInstance != 5) {
+        return 68;
+    }
+
+    // ====== Test 11: Device Creation ======
     auto device = CreateRenderDevice(256);
     if (!device) {
         return 9;
@@ -249,11 +299,12 @@ void main() {
     IndirectDrawArraysCommand indirectCommands[] = {
         {24, 1, 0, 0},
         {12, 2, 24, 0},
+        {0, 1, 64, 0},
     };
     IndirectDrawBatch indirectBatch{};
     indirectBatch.topology = PrimitiveTopology::Triangles;
     indirectBatch.commands = indirectCommands;
-    indirectBatch.commandCount = 2;
+    indirectBatch.commandCount = 3;
     indirectBatch.stride = sizeof(IndirectDrawArraysCommand);
     device->drawIndirect(indirectBatch);
 
@@ -273,9 +324,14 @@ void main() {
     if (MetalCraftJNI_GetDrawCallCount() != 2) {
         return 28;
     }
+    std::array<StridedIndirectCommand, 3> stridedJniCommands = {{
+        {{24, 1, 0, 0}, 1U},
+        {{12, 2, 24, 0}, 2U},
+        {{0, 1, 64, 0}, 3U},
+    }};
     if (MetalCraftJNI_DrawMulti(static_cast<jint>(PrimitiveTopology::Triangles),
-                                reinterpret_cast<jlong>(indirectCommands), 2,
-                                sizeof(IndirectDrawArraysCommand)) == JNI_FALSE) {
+                                reinterpret_cast<jlong>(stridedJniCommands.data()), 3,
+                                sizeof(StridedIndirectCommand)) == JNI_FALSE) {
         return 29;
     }
     if (MetalCraftJNI_GetDrawCallCount() != 4) {
