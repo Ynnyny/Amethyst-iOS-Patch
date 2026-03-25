@@ -239,6 +239,10 @@ extern "C"
     DEFINE_RAW(gles, name);                                                                                            \
     { LOAD_RAW_SILENT(gles, name, proc_address(gles, #name)); }
 
+#define LOAD_GLES3_OR_EXT(name)                                                                                        \
+    DEFINE_RAW(gles, name);                                                                                            \
+    { LOAD_RAW_SILENT(gles, name, proc_address(gles, #name)); }
+
 #else // defined(AMIGAOS4) || defined(NOEGL)
 
 #define LOAD_EGL_EXT(name)                                                                                             \
