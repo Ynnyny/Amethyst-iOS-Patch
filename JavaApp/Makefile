@@ -15,7 +15,7 @@ JAVAC_SUPPORTS_PATCH_MODULE := $(shell { $(BOOTJDK)/javac --help-extra 2>&1 || t
 all: $(TARGETS)
 	
 # Sometimes the CI produces empty class file resulting in broken jar, so we check and abort here
-check_empty_classes:
+check_empty_classes: $(CLASSES)
 	@set -e; \
 	echo "Checking for empty class files"; \
 	EMPTY_CLASSES="$$(find $(OUTPUTDIR) -name '*.class' -size 0)"; \
