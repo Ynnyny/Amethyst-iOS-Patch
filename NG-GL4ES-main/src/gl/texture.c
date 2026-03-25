@@ -734,7 +734,7 @@ static void* swizzle_texture(GLsizei width, GLsizei height, GLenum* format, GLen
             break;
         case GL_DEPTH32F_STENCIL8:
         case GL_DEPTH24_STENCIL8:
-        case GL_DEPTH_STENCIL:
+        case GL_DEPTH_STENCIL: {
             // if (hardext.depthtex && hardext.depthstencil) {
             const int is32F = *format == GL_DEPTH32F_STENCIL8;
             *format = dest_format = GL_DEPTH_STENCIL;
@@ -743,6 +743,7 @@ static void* swizzle_texture(GLsizei width, GLsizei height, GLenum* format, GLen
             //}
             // else convert = 1;
             break;
+        }
         case GL_DEPTH_COMPONENT:
             check = 0;
             // if (hardext.depthtex) {
@@ -1376,13 +1377,13 @@ void APIENTRY_GL4ES gl4es_glTexImage2D(GLenum target, GLint level, GLint interna
         internalformat = GL_RGBA;
     }
 
-    internal_convert(&internalformat, &type, &format);
+    internal_convert((GLenum*)&internalformat, &type, &format);
 
     if (data == NULL && (internalformat == GL_RGB16F || internalformat == GL_RGBA16F))
-        internal2format_type(&internalformat, &format, &type);
-    if (internalformat == GL_R16F) internal2format_type(&internalformat, &format, &type);
+        internal2format_type((GLenum*)&internalformat, &format, &type);
+    if (internalformat == GL_R16F) internal2format_type((GLenum*)&internalformat, &format, &type);
     if (data == NULL && (internalformat == GL_RED || internalformat == GL_RGB))
-        internal2format_type(&internalformat, &format, &type);
+        internal2format_type((GLenum*)&internalformat, &format, &type);
 
     if (internalformat == GL_DEPTH32F_STENCIL8 && type == GL_FLOAT_32_UNSIGNED_INT_24_8_REV) {
         internalformat = GL_DEPTH24_STENCIL8;
