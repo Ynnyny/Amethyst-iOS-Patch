@@ -30,7 +30,10 @@ typedef khronos_ssize_t  GLsizeiptr;
 
 typedef double           GLdouble;
 
+#ifndef GLHANDLEARB_DEFINED
 typedef unsigned int     GLhandleARB;
+#define GLHANDLEARB_DEFINED
+#endif
 typedef char             GLcharARB;
 /*************************************************************/
 
