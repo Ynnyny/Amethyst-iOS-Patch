@@ -332,6 +332,19 @@ dep_mg: deps
 
 dep_kw: deps
 	echo '[Amethyst v$(VERSION)] dep_kw - start'
+	@# Restore 3rdparty dependencies if missing
+	@if [ ! -d "$(SOURCEDIR)/NG-GL4ES-main/3rdparty/glslang/CMakeLists.txt" ] && \
+	    [ -z "$$(find $(SOURCEDIR)/NG-GL4ES-main/3rdparty/glslang -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]; then \
+		echo "Restoring NG-GL4ES 3rdparty/glslang..."; \
+		rm -rf "$(SOURCEDIR)/NG-GL4ES-main/3rdparty/glslang"; \
+		git clone --depth=1 https://github.com/KhronosGroup/glslang.git "$(SOURCEDIR)/NG-GL4ES-main/3rdparty/glslang"; \
+	fi
+	@if [ ! -d "$(SOURCEDIR)/NG-GL4ES-main/3rdparty/SPIRV-Cross/CMakeLists.txt" ] && \
+	    [ -z "$$(find $(SOURCEDIR)/NG-GL4ES-main/3rdparty/SPIRV-Cross -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]; then \
+		echo "Restoring NG-GL4ES 3rdparty/SPIRV-Cross..."; \
+		rm -rf "$(SOURCEDIR)/NG-GL4ES-main/3rdparty/SPIRV-Cross"; \
+		git clone --depth=1 https://github.com/KhronosGroup/SPIRV-Cross.git "$(SOURCEDIR)/NG-GL4ES-main/3rdparty/SPIRV-Cross"; \
+	fi
 	mkdir -p $(WORKINGDIR)/krypton_wrapper
 	cd $(WORKINGDIR)/krypton_wrapper && cmake \
 		-DMACOS="1" \
