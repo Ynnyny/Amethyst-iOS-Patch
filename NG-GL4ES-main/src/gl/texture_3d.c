@@ -70,13 +70,16 @@ void APIENTRY_GL4ES gl4es_glTexImage3D(GLenum target, GLint level, GLint interna
         DBG(SHUT_LOGE("Error: width, height or depth is zero."))
         return;
     }
-    if (format == GL_DEPTH_COMPONENT) {
+    if (format == GL_DEPTH_COMPONENT && internalformat == GL_DEPTH_COMPONENT) {
         internalformat = GL_DEPTH_COMPONENT;
         type = GL_UNSIGNED_INT;
     }
+    if (format == GL_DEPTH_STENCIL && internalformat == GL_DEPTH_STENCIL) {
+        type = GL_UNSIGNED_INT_24_8;
+    }
     if (internalformat == GL_RGBA16) {
         internalformat = GL_RGBA16F;
-        type = GL_FLOAT;
+        type = GL_HALF_FLOAT;
 #ifdef GL_RGBA16_SNORM
     } else if (internalformat == GL_RGBA16_SNORM) {
         internalformat = GL_RGBA;
@@ -324,6 +327,9 @@ void APIENTRY_GL4ES gl4es_glTexStorage3D(GLenum target, GLsizei levels, GLenum i
         noerrorShim();
         return;
     }
+    GLenum format = GL_RGBA;
+    GLenum type = GL_UNSIGNED_BYTE;
+    gl4es_pick_tex_storage_upload(internalformat, &format, &type);
     if ((internalformat == GL_COMPRESSED_RGB_S3TC_DXT1_EXT || internalformat == GL_COMPRESSED_SRGB_S3TC_DXT1_EXT) &&
         !globals4es.avoid16bits)
         gl4es_glTexImage3D(target, 0, internalformat, width, height, depth, 0, GL_RGB, GL_UNSIGNED_SHORT_5_6_5, NULL);
@@ -340,7 +346,7 @@ void APIENTRY_GL4ES gl4es_glTexStorage3D(GLenum target, GLsizei levels, GLenum i
         gl4es_glTexImage3D(target, 0, internalformat, width, height, depth, 0, GL_RGBA, GL_UNSIGNED_SHORT_4_4_4_4,
                            NULL);
     else
-        gl4es_glTexImage3D(target, 0, internalformat, width, height, depth, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+        gl4es_glTexImage3D(target, 0, internalformat, width, height, depth, 0, format, type, NULL);
 
     int mlevel = maxlevel3d(width, height, depth);
     gltexture_t* bound = gl4es_getCurrentTexture(target);

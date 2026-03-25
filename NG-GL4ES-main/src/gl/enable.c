@@ -11,6 +11,12 @@
 #define DBG(a)
 #endif
 
+#ifndef GL_TEXTURE_CUBE_MAP_SEAMLESS
+#define GL_TEXTURE_CUBE_MAP_SEAMLESS 0x884F
+#endif
+
+static GLboolean cube_map_seamless = GL_FALSE;
+
 static void gl_changetex(int n)
 {
     if(glstate->bound_changed < n+1)
@@ -143,7 +149,11 @@ static void proxy_glEnable(GLenum cap, bool enable, void (APIENTRY_GLES *next)(G
 
         // point sprite
         proxy_GOFPE(GL_POINT_SPRITE, pointsprite, glstate->fpe_state->pointsprite=enable); // TODO: plugin fpe stuffs
-        proxy_GO(GL_PROGRAM_POINT_SIZE, point_size);
+        GO(GL_PROGRAM_POINT_SIZE, point_size);
+        case GL_TEXTURE_CUBE_MAP_SEAMLESS:
+            if (glstate->list.pending && cube_map_seamless != enable) gl4es_flush();
+            cube_map_seamless = enable;
+            break;
 
         // Smooth and multisample (todo: do somthing with fpe?)
         proxy_GOFPE(GL_MULTISAMPLE, multisample, );
@@ -360,6 +370,7 @@ GLboolean APIENTRY_GL4ES gl4es_glIsEnabled(GLenum cap) {
         isenabled(GL_COLOR_SUM, color_sum);
         isenabled(GL_POINT_SPRITE, pointsprite);
         isenabled(GL_PROGRAM_POINT_SIZE, point_size);
+        case GL_TEXTURE_CUBE_MAP_SEAMLESS: return cube_map_seamless;
         isenabled(GL_CLIP_PLANE0, plane[0]);
         isenabled(GL_CLIP_PLANE1, plane[1]);
         isenabled(GL_CLIP_PLANE2, plane[2]);
