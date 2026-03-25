@@ -164,6 +164,7 @@ target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
 if(MACOS)
     # iOS
     target_link_libraries(${CMAKE_PROJECT_NAME} PUBLIC
+        "-F${CMAKE_SOURCE_DIR}/../Natives/external/MobileGlues/MobileGlues-cpp/external"
         "-F${CMAKE_SOURCE_DIR}/external"
         "-framework libEGL"
         "-framework libGLESv2"
