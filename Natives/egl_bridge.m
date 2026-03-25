@@ -83,7 +83,7 @@ int pojavInit(BOOL useStackQueue) {
 
 int pojavInitOpenGL() {
     NSDictionary<NSString *, NSString *> *environment = NSProcessInfo.processInfo.environment;
-    NSString *requestedRenderer = environment[@"POJAV_RENDERER"];
+    NSString *requestedRenderer = environment[@"AMETHYST_RENDERER"];
     NSString *renderer = environment[@"POJAV_RENDERER_BACKEND"];
     if (renderer.length == 0) {
         renderer = requestedRenderer;

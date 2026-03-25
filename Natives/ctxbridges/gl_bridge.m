@@ -54,7 +54,7 @@ gl_render_window_t* gl_init_context(gl_render_window_t *share) {
     NSDictionary<NSString *, NSString *> *environment = NSProcessInfo.processInfo.environment;
     NSString *renderer = environment[@"POJAV_RENDERER_BACKEND"];
     if (renderer.length == 0) {
-        renderer = environment[@"POJAV_RENDERER"];
+        renderer = environment[@"AMETHYST_RENDERER"];
     }
     BOOL angleDesktopGL = [renderer isEqualToString:@ RENDERER_NAME_MTL_ANGLE];
 
