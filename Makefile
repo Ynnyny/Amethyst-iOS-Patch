@@ -265,7 +265,7 @@ deps:
 	bash scripts/ci/restore_external_dependencies.sh
 	echo '[Amethyst v$(VERSION)] deps - end'
 
-native: deps dep_mg
+native: deps dep_mg dep_kw
 	echo '[Amethyst v$(VERSION)] native - start'
 	mkdir -p $(WORKINGDIR)
 	cd $(WORKINGDIR) && cmake \
@@ -330,6 +330,26 @@ dep_mg: deps
 	cp $(WORKINGDIR)/mobileglues/libmobileglues.dylib $(WORKINGDIR)/libmobileglues.dylib
 	echo '[Amethyst v$(VERSION)] dep_mg - end'
 
+dep_kw: deps
+	echo '[Amethyst v$(VERSION)] dep_kw - start'
+	mkdir -p $(WORKINGDIR)/krypton_wrapper
+	cd $(WORKINGDIR)/krypton_wrapper && cmake \
+		-DMACOS="1" \
+		-DCMAKE_BUILD_TYPE=Release \
+		-DCMAKE_CROSSCOMPILING=true \
+		-DCMAKE_SYSTEM_NAME=Darwin \
+		-DCMAKE_SYSTEM_PROCESSOR=aarch64 \
+		-DCMAKE_OSX_SYSROOT="$(SDKPATH)" \
+		-DCMAKE_OSX_ARCHITECTURES=arm64 \
+		-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
+		-DCMAKE_C_FLAGS="-arch arm64" \
+		-DCMAKE_SYSROOT="$(SDKPATH)" \
+		$(SOURCEDIR)/NG-GL4ES-main/
+
+	cmake --build $(WORKINGDIR)/krypton_wrapper --config Release -j$(JOBS) --target ng_gl4es
+	cp $(WORKINGDIR)/krypton_wrapper/libng_gl4es.dylib $(WORKINGDIR)/libng_gl4es.dylib
+	echo '[Amethyst v$(VERSION)] dep_kw - end'
+
 assets:
 	echo '[Amethyst v$(VERSION)] assets - start'
 	if [ '$(IOS)' = '0' ] && [ '$(DETECTPLAT)' = 'Darwin' ]; then \
@@ -345,7 +365,7 @@ assets:
 	fi
 	echo '[Amethyst v$(VERSION)] assets - end'
 
-payload: native dep_mg java jre assets
+payload: native dep_mg dep_kw java jre assets
 	echo '[Amethyst v$(VERSION)] payload - start'
 	$(call METHOD_DIRCHECK,$(WORKINGDIR)/AngelAuraAmethyst.app/libs)
 	$(call METHOD_DIRCHECK,$(WORKINGDIR)/AngelAuraAmethyst.app/libs_caciocavallo)
@@ -441,4 +461,4 @@ clean:
 
 		
 
-.PHONY: all clean check deps native java jre package dsym deploy help
+.PHONY: all clean check deps native java jre package dsym deploy help dep_kw

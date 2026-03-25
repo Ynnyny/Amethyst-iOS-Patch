@@ -112,6 +112,10 @@ int pojavInitOpenGL() {
         renderer = @ RENDERER_NAME_MOBILEGLUES;
         setenv("POJAV_RENDERER_BACKEND", renderer.UTF8String, 1);
         set_gl_bridge_tbl();
+    } else if ([renderer isEqualToString:@ RENDERER_NAME_KRYPTON_WRAPPER]) {
+        renderer = @ RENDERER_NAME_KRYPTON_WRAPPER;
+        setenv("POJAV_RENDERER_BACKEND", renderer.UTF8String, 1);
+        set_gl_bridge_tbl();
     } else if ([renderer isEqualToString:@ RENDERER_NAME_MTL_ANGLE]) {
         setenv("POJAV_RENDERER_BACKEND", renderer.UTF8String, 1);
         set_gl_bridge_tbl();

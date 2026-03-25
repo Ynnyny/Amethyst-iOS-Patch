@@ -275,7 +275,9 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
 
     // Preset OpenGL libname
     const char *glLibName = getenv("POJAV_RENDERER_BACKEND");
+    if (!glLibName || !*glLibName) {
         glLibName = getenv("AMETHYST_RENDERER");
+    }
     if (glLibName) {
         if (!strcmp(glLibName, "auto")) {
             // workaround only applies to 1.20.2+
