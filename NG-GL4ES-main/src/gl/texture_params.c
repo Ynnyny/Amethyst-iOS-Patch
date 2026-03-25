@@ -321,8 +321,15 @@ void APIENTRY_GL4ES gl4es_glTexParameterfv(GLenum target, GLenum pname, const GL
     LOAD_GLES(glTexParameterfv);
     realize_bound(glstate->texture.active, target);
 
-    gles_glTexParameterfv(rtarget, pname, params);
-    errorGL();
+    bool forward_to_gles = true;
+    if (pname == GL_TEXTURE_LOD_BIAS || pname == 0x884F /* GL_TEXTURE_COMPARE_MODE */) {
+        forward_to_gles = false;
+    }
+
+    if (forward_to_gles) {
+        gles_glTexParameterfv(rtarget, pname, params);
+        errorGL();
+    }
 
     if (!samplerParameterfv(&texture->sampler, pname, params)) {
         GLint param = params[0];

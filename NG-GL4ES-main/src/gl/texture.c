@@ -1104,24 +1104,26 @@ GLenum swizzle_internalformat(GLenum* internalformat, GLenum format, GLenum type
         }
         break;
     case GL_DEPTH_COMPONENT:
-        // if (hardext.depthtex) {
-        sret = ret = GL_DEPTH_COMPONENT;
-        //}
-        // else {
-        //    sret = ret = GL_RGBA;
-        //}
+        if (type == GL_UNSIGNED_SHORT) {
+            sret = ret = GL_DEPTH_COMPONENT16;
+        } else if (type == GL_UNSIGNED_INT) {
+            sret = ret = GL_DEPTH_COMPONENT24;
+        } else if (type == GL_FLOAT) {
+            sret = ret = GL_DEPTH_COMPONENT32F;
+        } else {
+            sret = ret = GL_DEPTH_COMPONENT;
+        }
         break;
     case GL_DEPTH_COMPONENT16:
     case GL_DEPTH_COMPONENT24:
     case GL_DEPTH_COMPONENT32:
     case GL_DEPTH_COMPONENT32F:
-        // if (hardext.depthtex) {
         switch (type) {
         case GL_UNSIGNED_SHORT:
-            sret = ret = GL_DEPTH_COMPONENT;
+            sret = ret = GL_DEPTH_COMPONENT16;
             break;
         case GL_UNSIGNED_INT:
-            sret = ret = GL_DEPTH_COMPONENT;
+            sret = ret = GL_DEPTH_COMPONENT24;
             break;
         case GL_FLOAT:
             sret = ret = GL_DEPTH_COMPONENT32F;
@@ -1130,10 +1132,6 @@ GLenum swizzle_internalformat(GLenum* internalformat, GLenum format, GLenum type
             sret = ret = GL_DEPTH_COMPONENT;
             break;
         }
-        //}
-        // else {
-        //    sret = ret = GL_RGBA;
-        //}
         break;
     case GL_DEPTH_STENCIL:
     case GL_DEPTH24_STENCIL8:
