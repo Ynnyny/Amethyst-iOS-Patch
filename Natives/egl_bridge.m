@@ -142,7 +142,7 @@ void pojavSetWindowHint(int hint, int value) {
     if (hint == GLFW_CLIENT_API) {
         clientAPI = value;
     } else {
-        const char *requestedRenderer = getenv("POJAV_RENDERER");
+        const char *requestedRenderer = getenv("AMETHYST_RENDERER");
         if (requestedRenderer == NULL || strcmp(requestedRenderer, "auto") != 0 ||
             hint != GLFW_CONTEXT_VERSION_MAJOR) {
             return;
@@ -151,13 +151,13 @@ void pojavSetWindowHint(int hint, int value) {
         switch (value) {
             case 1:
             case 2:
-                setenv("POJAV_RENDERER", RENDERER_NAME_GL4ES, 1);
+                setenv("AMETHYST_RENDERER", RENDERER_NAME_GL4ES, 1);
                 setenv("POJAV_RENDERER_BACKEND", RENDERER_NAME_GL4ES, 1);
                 JNI_LWJGL_changeRenderer(RENDERER_NAME_GL4ES);
                 break;
             // case 4: use Zink?
             default:
-                setenv("POJAV_RENDERER", RENDERER_NAME_MOBILEGLUES, 1);
+                setenv("AMETHYST_RENDERER", RENDERER_NAME_MOBILEGLUES, 1);
                 setenv("POJAV_RENDERER_BACKEND", RENDERER_NAME_MOBILEGLUES, 1);
                 JNI_LWJGL_changeRenderer(RENDERER_NAME_MOBILEGLUES);
                 break;

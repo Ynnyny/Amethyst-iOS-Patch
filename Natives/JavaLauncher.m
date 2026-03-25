@@ -192,7 +192,7 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
         }
         NSLog(@"[JavaLauncher] RENDERER is set to %@ (backend: %@)\n", requestedRenderer,
               backendRenderer);
-        setenv("POJAV_RENDERER", requestedRenderer.UTF8String, 1);
+        setenv("AMETHYST_RENDERER", requestedRenderer.UTF8String, 1);
         setenv("POJAV_RENDERER_BACKEND", backendRenderer.UTF8String, 1);
         // Setup gameDir
         gameDir = [NSString stringWithFormat:@"%s/instances/%@/%@",
@@ -275,9 +275,7 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
 
     // Preset OpenGL libname
     const char *glLibName = getenv("POJAV_RENDERER_BACKEND");
-    if (!glLibName) {
-        glLibName = getenv("POJAV_RENDERER");
-    }
+        glLibName = getenv("AMETHYST_RENDERER");
     if (glLibName) {
         if (!strcmp(glLibName, "auto")) {
             // workaround only applies to 1.20.2+
@@ -285,7 +283,7 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
         }
         margv[++margc] = [NSString stringWithFormat:@"-Dorg.lwjgl.opengl.libname=%s", glLibName].UTF8String;
     }
-    const char *requestedRenderer = getenv("POJAV_RENDERER");
+    const char *requestedRenderer = getenv("AMETHYST_RENDERER");
     if (requestedRenderer) {
         margv[++margc] =
             [NSString stringWithFormat:@"-Dpojav.renderer.requested=%s", requestedRenderer]
