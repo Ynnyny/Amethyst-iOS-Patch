@@ -21,6 +21,8 @@
 
 int clientAPI;
 
+__thread basic_render_window_t* currentBundle = NULL;
+
 typedef jboolean (*MetalCraftIsSupportedProc)(void);
 typedef void (*MetalCraftShutdownProc)(void);
 
