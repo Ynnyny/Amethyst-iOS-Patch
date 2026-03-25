@@ -60,7 +60,7 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fPIC -DNO_GBM -DDEFAULT_ES=3 -fvisibility=h
 if(ANDROID)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DNOX11")
 elseif(MACOS)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DNOX11 -DNOEGL")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DNOX11")
 endif()
 
 include_directories(${CMAKE_SOURCE_DIR}/include )

@@ -291,6 +291,10 @@ void GetHardwareExtensions(int notest) {
     // Now get extensions
     const char* Exts = (const char*)gles_glGetString(GL_EXTENSIONS);
 // Parse them!
+    if (!Exts) {
+        SHUT_LOGE("Exts is NULL! Cannot parse GL_EXTENSIONS.");
+        return;
+    }
 #define S(A, B, C)                                                                                                     \
     if (strstr(Exts, A)) {                                                                                             \
         hardext.B = 1;                                                                                                 \
