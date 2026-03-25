@@ -55,12 +55,43 @@ public final class MetalCraftBridge {
     private MetalCraftBridge() {}
 
     private static boolean loadNativeLibrary() {
+        // Try multiple library loading strategies since the library location
+        // may vary between build configurations on iOS
+        String bundlePath = System.getenv("BUNDLE_PATH");
+
+        // Strategy 1: Standard loadLibrary (searches java.library.path / Frameworks)
         try {
             System.loadLibrary("MetalCraft");
+            System.out.println("[MetalCraft] Native library loaded via System.loadLibrary");
             return nIsSupported();
-        } catch (UnsatisfiedLinkError ignored) {
-            return false;
+        } catch (UnsatisfiedLinkError e1) {
+            System.out.println("[MetalCraft] System.loadLibrary failed: " + e1.getMessage());
         }
+
+        // Strategy 2: Full path in Frameworks directory
+        if (bundlePath != null) {
+            try {
+                System.load(bundlePath + "/Frameworks/libMetalCraft.dylib");
+                System.out.println("[MetalCraft] Native library loaded from Frameworks/");
+                return nIsSupported();
+            } catch (UnsatisfiedLinkError e2) {
+                System.out.println("[MetalCraft] Frameworks/ load failed: " + e2.getMessage());
+            }
+
+            // Strategy 3: Full path at bundle root (matches dlopen @rpath resolution)
+            try {
+                System.load(bundlePath + "/libMetalCraft.dylib");
+                System.out.println("[MetalCraft] Native library loaded from bundle root");
+                return nIsSupported();
+            } catch (UnsatisfiedLinkError e3) {
+                System.out.println("[MetalCraft] Bundle root load failed: " + e3.getMessage());
+            }
+        } else {
+            System.out.println("[MetalCraft] BUNDLE_PATH not set, cannot try fallback paths");
+        }
+
+        System.out.println("[MetalCraft] All loading strategies failed, MetalCraft unavailable");
+        return false;
     }
 
     public static boolean isAvailable() {

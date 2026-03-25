@@ -98,7 +98,12 @@ public class PojavLauncher {
 
         System.setProperty("org.lwjgl.vulkan.libname", "libMoltenVK.dylib");
         MetalCraftBridge.bootstrapRequestedRenderer();
-        MetalCraftGLInterceptor.bootstrap();
+        System.out.println("[MetalCraft] Bootstrap: available=" + MetalCraftBridge.isAvailable()
+                + " metalcraft.active=" + System.getProperty("pojav.renderer.metalcraft.active")
+                + " metalcraft=" + System.getProperty("pojav.renderer.metalcraft"));
+        boolean interceptorActive = MetalCraftGLInterceptor.bootstrap();
+        System.out.println("[MetalCraft] Interceptor bootstrap result: " + interceptorActive
+                + " (isActive=" + MetalCraftGLInterceptor.isActive() + ")");
 
         MinecraftAccount account = MinecraftAccount.load(args[0]);
         JMinecraftVersionList.Version version = Tools.getVersionInfo(args[1]);

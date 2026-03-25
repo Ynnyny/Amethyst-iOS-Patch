@@ -132,11 +132,18 @@ int pojavInitOpenGL() {
     if (useMetalCraft) {
         void *metalCraftHandle = dlopen("@rpath/libMetalCraft.dylib", RTLD_GLOBAL);
         if (metalCraftHandle != NULL) {
+            NSLog(@"[MetalCraft] Native library loaded via dlopen");
             MetalCraftIsSupportedProc isSupported =
                 (MetalCraftIsSupportedProc)dlsym(metalCraftHandle, "MetalCraftJNI_IsSupported");
             if (isSupported != NULL && isSupported() == JNI_FALSE) {
+                NSLog(@"[MetalCraft] MetalCraftJNI_IsSupported returned false, disabling");
                 unsetenv("POJAV_METALCRAFT_ENABLED");
+            } else {
+                NSLog(@"[MetalCraft] MetalCraft is supported and enabled");
             }
+        } else {
+            NSLog(@"[MetalCraft] Failed to load libMetalCraft.dylib: %s", dlerror());
+            unsetenv("POJAV_METALCRAFT_ENABLED");
         }
     }
 
