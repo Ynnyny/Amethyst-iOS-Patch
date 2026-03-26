@@ -28,6 +28,44 @@ KHASH_MAP_IMPL_INT(framebufferlist_t, glframebuffer_t*);
 int npot(int n);
 int wrap_npot(GLenum wrap);
 
+static GLenum fbo_preferred_depth_type() {
+    return (hardext.depth24 && !globals4es.enableANGLE && !globals4es.avoid24bits) ? GL_UNSIGNED_INT
+                                                                                     : GL_UNSIGNED_SHORT;
+}
+
+static GLenum fbo_preferred_depth_internalformat() {
+    return (fbo_preferred_depth_type() == GL_UNSIGNED_INT) ? GL_DEPTH_COMPONENT24 : GL_DEPTH_COMPONENT16;
+}
+
+static GLboolean fbo_needs_storage_normalization(GLenum internalformat) {
+    switch (internalformat) {
+    case GL_DEPTH_COMPONENT:
+    case GL_DEPTH_COMPONENT16:
+    case GL_DEPTH_COMPONENT24:
+    case GL_DEPTH_COMPONENT32:
+    case GL_DEPTH_COMPONENT32F:
+    case GL_DEPTH_STENCIL:
+    case GL_DEPTH24_STENCIL8:
+    case GL_DEPTH32F_STENCIL8:
+    case GL_SRGB8:
+    case GL_SRGB8_ALPHA8:
+        return GL_TRUE;
+    default:
+        return GL_FALSE;
+    }
+}
+
+static void fbo_tex_image_allocation_2d(GLenum target, GLint level, GLint internalformat, GLsizei width,
+                                        GLsizei height, GLenum format, GLenum type) {
+    LOAD_GLES(glTexImage2D);
+    if (fbo_needs_storage_normalization(internalformat)) {
+        internal_convert(&internalformat, &type, &format);
+        gl4es_pick_tex_storage_upload(internalformat, &format, &type);
+        gl4es_normalize_storage_allocation(&internalformat, &format, &type);
+    }
+    gles_glTexImage2D(target, level, internalformat, width, height, 0, format, type, NULL);
+}
+
 static void fpe_mark_texture_dirty(gltexture_t* tex) {
     if (!glstate || !glstate->fpe_state || !tex) return;
     int max = glstate->fpe_bound_changed;
@@ -528,8 +566,8 @@ void APIENTRY_GL4ES gl4es_glFramebufferTexture2D(GLenum target, GLenum attachmen
                 gltexture_t* bound = glstate->texture.bound[0 /*glstate->texture.active*/][ENABLED_TEX2D];
                 GLuint oldtex = bound->glname;
                 if (oldtex != tex->glname) gles_glBindTexture(GL_TEXTURE_2D, tex->glname);
-                gles_glTexImage2D(GL_TEXTURE_2D, 0, tex->format, tex->nwidth, tex->nheight, 0, tex->format, tex->type,
-                                  NULL);
+                fbo_tex_image_allocation_2d(GL_TEXTURE_2D, 0, tex->format, tex->nwidth, tex->nheight, tex->format,
+                                            tex->type);
                 if (oldtex != tex->glname) gles_glBindTexture(GL_TEXTURE_2D, oldtex);
                 if (oldactive) gles_glActiveTexture(GL_TEXTURE0 + oldactive);
             }
@@ -560,8 +598,8 @@ void APIENTRY_GL4ES gl4es_glFramebufferTexture2D(GLenum target, GLenum attachmen
                 gltexture_t* bound = glstate->texture.bound[0 /*glstate->texture.active*/][ENABLED_TEX2D];
                 GLuint oldtex = bound->glname;
                 if (oldtex != tex->glname) gles_glBindTexture(GL_TEXTURE_2D, tex->glname);
-                gles_glTexImage2D(GL_TEXTURE_2D, 0, tex->format, tex->nwidth, tex->nheight, 0, tex->format, tex->type,
-                                  NULL);
+                fbo_tex_image_allocation_2d(GL_TEXTURE_2D, 0, tex->format, tex->nwidth, tex->nheight, tex->format,
+                                            tex->type);
                 if (oldtex != tex->glname) gles_glBindTexture(GL_TEXTURE_2D, oldtex);
                 if (oldactive) gles_glActiveTexture(GL_TEXTURE0 + oldactive);
             }
@@ -658,7 +696,7 @@ void APIENTRY_GL4ES gl4es_glFramebufferTexture2D(GLenum target, GLenum attachmen
             if (tex && !(tex->format == GL_DEPTH_COMPONENT || tex->format == GL_DEPTH_STENCIL)) {
                 tex->format = GL_DEPTH_COMPONENT;
                 if (tex->type != GL_UNSIGNED_INT && tex->type != GL_UNSIGNED_SHORT && tex->type != GL_FLOAT)
-                    tex->type = (hardext.depth24) ? GL_UNSIGNED_INT : GL_UNSIGNED_SHORT;
+                    tex->type = fbo_preferred_depth_type();
                 tex->fpe_format = FPE_TEX_DEPTH;
                 realize_textures(0);
                 int oldactive = glstate->texture.active;
@@ -670,8 +708,8 @@ void APIENTRY_GL4ES gl4es_glFramebufferTexture2D(GLenum target, GLenum attachmen
                 gles_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
                 gles_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
                 gles_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-                gles_glTexImage2D(GL_TEXTURE_2D, 0, tex->format, tex->nwidth, tex->nheight, 0, tex->format, tex->type,
-                                  NULL);
+                fbo_tex_image_allocation_2d(GL_TEXTURE_2D, 0, tex->format, tex->nwidth, tex->nheight, tex->format,
+                                            tex->type);
                 if (oldtex != tex->glname) gles_glBindTexture(GL_TEXTURE_2D, oldtex);
                 if (oldactive) gles_glActiveTexture(GL_TEXTURE0 + oldactive);
             }
@@ -737,8 +775,8 @@ void APIENTRY_GL4ES gl4es_glFramebufferTexture2D(GLenum target, GLenum attachmen
                     gles_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
                     gles_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
                     gles_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-                    gles_glTexImage2D(GL_TEXTURE_2D, 0, tex->format, tex->nwidth, tex->nheight, 0, tex->format,
-                                      tex->type, NULL);
+                    fbo_tex_image_allocation_2d(GL_TEXTURE_2D, 0, tex->format, tex->nwidth, tex->nheight,
+                                                tex->format, tex->type);
                     if (oldtex != tex->glname) gles_glBindTexture(GL_TEXTURE_2D, oldtex);
                     if (oldactive) gles_glActiveTexture(GL_TEXTURE0 + oldactive);
                 }
@@ -779,8 +817,8 @@ void APIENTRY_GL4ES gl4es_glFramebufferTexture2D(GLenum target, GLenum attachmen
                     gles_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
                     gles_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
                     gles_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-                    gles_glTexImage2D(GL_TEXTURE_2D, 0, tex->format, tex->nwidth, tex->nheight, 0, tex->format,
-                                      tex->type, NULL);
+                    fbo_tex_image_allocation_2d(GL_TEXTURE_2D, 0, tex->format, tex->nwidth, tex->nheight,
+                                                tex->format, tex->type);
                     if (oldtex != tex->glname) gles_glBindTexture(GL_TEXTURE_2D, oldtex);
                     if (oldactive) gles_glActiveTexture(GL_TEXTURE0 + oldactive);
                 }
@@ -806,7 +844,7 @@ void APIENTRY_GL4ES gl4es_glFramebufferTexture2D(GLenum target, GLenum attachmen
                 if (tex && tex->format != GL_DEPTH_COMPONENT) {
                     tex->format = GL_DEPTH_COMPONENT;
                     if (tex->type != GL_UNSIGNED_INT && tex->type != GL_UNSIGNED_SHORT && tex->type != GL_FLOAT)
-                        tex->type = (hardext.depth24) ? GL_UNSIGNED_INT : GL_UNSIGNED_SHORT;
+                        tex->type = fbo_preferred_depth_type();
                     tex->fpe_format = FPE_TEX_DEPTH;
                     int oldactive = glstate->texture.active;
                     if (oldactive) gles_glActiveTexture(GL_TEXTURE0);
@@ -817,8 +855,8 @@ void APIENTRY_GL4ES gl4es_glFramebufferTexture2D(GLenum target, GLenum attachmen
                     gles_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
                     gles_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
                     gles_glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-                    gles_glTexImage2D(GL_TEXTURE_2D, 0, tex->format, tex->nwidth, tex->nheight, 0, tex->format,
-                                      tex->type, NULL);
+                    fbo_tex_image_allocation_2d(GL_TEXTURE_2D, 0, tex->format, tex->nwidth, tex->nheight,
+                                                tex->format, tex->type);
                     if (oldtex != tex->glname) gles_glBindTexture(GL_TEXTURE_2D, oldtex);
                     if (oldactive) gles_glActiveTexture(GL_TEXTURE0 + oldactive);
                 }
@@ -1039,7 +1077,7 @@ void APIENTRY_GL4ES gl4es_glRenderbufferStorage(GLenum target, GLenum internalfo
         if (hardext.depthstencil) {
             internalformat = GL_DEPTH24_STENCIL8;
         } else {
-            internalformat = GL_DEPTH_COMPONENT32F;
+            internalformat = fbo_preferred_depth_internalformat();
             // create a stencil buffer if needed
             if (!rend->secondarybuffer) {
                 gles_glGenRenderbuffers(1, &rend->secondarybuffer);
@@ -1049,7 +1087,7 @@ void APIENTRY_GL4ES gl4es_glRenderbufferStorage(GLenum target, GLenum internalfo
     } else if (internalformat == GL_DEPTH_COMPONENT || internalformat == GL_DEPTH_COMPONENT16 ||
                internalformat == GL_DEPTH_COMPONENT24 ||
                internalformat == GL_DEPTH_COMPONENT32) // Not much is supported on GLES...
-        internalformat = GL_DEPTH_COMPONENT32F;
+        internalformat = fbo_preferred_depth_internalformat();
     else if (internalformat == GL_RGB8 && hardext.rgba8 == 0)
         internalformat = GL_RGB565_OES;
     else if (internalformat == GL_RGBA8 && hardext.rgba8 == 0)
@@ -1093,7 +1131,8 @@ void APIENTRY_GL4ES gl4es_glRenderbufferStorage(GLenum target, GLenum internalfo
         if (oldtex != rend->secondarytexture) gles_glBindTexture(GL_TEXTURE_2D, rend->secondarytexture);
         tex->nwidth = tex->width = width;
         tex->nheight = tex->height = height;
-        gles_glTexImage2D(GL_TEXTURE_2D, 0, tex->format, tex->nwidth, tex->nheight, 0, tex->format, tex->type, NULL);
+        fbo_tex_image_allocation_2d(GL_TEXTURE_2D, 0, tex->format, tex->nwidth, tex->nheight, tex->format,
+                                    tex->type);
         if (oldtex != tex->glname) gles_glBindTexture(GL_TEXTURE_2D, oldtex);
         if (oldactive) gles_glActiveTexture(GL_TEXTURE0 + oldactive);
     }
@@ -1332,7 +1371,7 @@ void createMainFBO(int width, int height) {
     gles_glBindRenderbuffer(GL_RENDERBUFFER, glstate->fbo.mainfbo_ste);
     gles_glRenderbufferStorage(GL_RENDERBUFFER, GL_STENCIL_INDEX8, width, height);
     gles_glBindRenderbuffer(GL_RENDERBUFFER, glstate->fbo.mainfbo_dep);
-    gles_glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT24, width, height);
+    gles_glRenderbufferStorage(GL_RENDERBUFFER, fbo_preferred_depth_internalformat(), width, height);
     gles_glBindRenderbuffer(GL_RENDERBUFFER, 0);
     // create a fbo
     if (createIt) gles_glGenFramebuffers(1, &glstate->fbo.mainfbo_fbo);

@@ -261,12 +261,14 @@ void gl4es_pick_tex_storage_upload(GLenum internalformat, GLenum* format, GLenum
 void gl4es_normalize_storage_allocation(GLenum* internalformat, GLenum* format, GLenum* type) {
     if (!internalformat || !format || !type) return;
 
+    const GLboolean prefer_depth24 = hardext.depth24 && !globals4es.enableANGLE && !globals4es.avoid24bits;
+
     switch (*internalformat) {
     case GL_DEPTH_COMPONENT:
     case GL_DEPTH_COMPONENT24:
     case GL_DEPTH_COMPONENT32:
     case GL_DEPTH_COMPONENT32F:
-        if (hardext.depth24) {
+        if (prefer_depth24) {
             *internalformat = GL_DEPTH_COMPONENT24;
             *format = GL_DEPTH_COMPONENT;
             *type = GL_UNSIGNED_INT;
@@ -283,7 +285,7 @@ void gl4es_normalize_storage_allocation(GLenum* internalformat, GLenum* format, 
             *internalformat = GL_DEPTH24_STENCIL8;
             *format = GL_DEPTH_STENCIL;
             *type = GL_UNSIGNED_INT_24_8;
-        } else if (hardext.depth24) {
+        } else if (prefer_depth24) {
             *internalformat = GL_DEPTH_COMPONENT24;
             *format = GL_DEPTH_COMPONENT;
             *type = GL_UNSIGNED_INT;

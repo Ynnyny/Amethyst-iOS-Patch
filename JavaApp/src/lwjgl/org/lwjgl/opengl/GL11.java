@@ -6,15 +6,28 @@ import java.nio.IntBuffer;
 import net.kdt.pojavlaunch.render.MetalCraftGLInterceptor;
 
 public class GL11 extends GL11C {
+    private static final int GL_TEXTURE_CUBE_MAP_SEAMLESS = 0x884F;
+    private static final int GL_PROGRAM_POINT_SIZE = 0x8642;
+
     private GL11() {}
+
+    private static boolean shouldIgnoreCapability(int cap) {
+        return cap == GL_TEXTURE_CUBE_MAP_SEAMLESS || cap == GL_PROGRAM_POINT_SIZE;
+    }
 
     public static void glEnable(int cap) {
         MetalCraftGLInterceptor.setCapability(cap, true);
+        if (shouldIgnoreCapability(cap)) {
+            return;
+        }
         GL11C.glEnable(cap);
     }
 
     public static void glDisable(int cap) {
         MetalCraftGLInterceptor.setCapability(cap, false);
+        if (shouldIgnoreCapability(cap)) {
+            return;
+        }
         GL11C.glDisable(cap);
     }
 

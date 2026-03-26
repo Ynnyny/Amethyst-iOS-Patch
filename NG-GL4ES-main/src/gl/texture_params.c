@@ -322,7 +322,7 @@ void APIENTRY_GL4ES gl4es_glTexParameterfv(GLenum target, GLenum pname, const GL
     realize_bound(glstate->texture.active, target);
 
     bool forward_to_gles = true;
-    if (pname == GL_TEXTURE_LOD_BIAS || pname == 0x884F /* GL_TEXTURE_COMPARE_MODE */) {
+    if (pname == GL_TEXTURE_LOD_BIAS || pname == GL_TEXTURE_COMPARE_MODE) {
         forward_to_gles = false;
     }
 
