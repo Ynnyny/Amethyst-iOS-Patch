@@ -1,5 +1,7 @@
 #import <Foundation/Foundation.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <dlfcn.h>
 
 #define GL_GLEXT_PROTOTYPES
@@ -74,6 +76,69 @@ static inline void normalizeTexImage2DParams(GLenum* internalformat, GLenum* for
     }
 }
 
+static inline int shaderVersionIsEs(const char* source) {
+    const char* newline = strchr(source, '\n');
+    const char* esMarker = strstr(source, " es");
+    return esMarker && (!newline || esMarker < newline);
+}
+
+static inline int shaderUsesLegacySyntax(const char* source) {
+    return strstr(source, "attribute ") || strstr(source, "varying ")
+        || strstr(source, "texture2D(") || strstr(source, "textureCube(")
+        || strstr(source, "gl_FragColor") || strstr(source, "gl_FragData");
+}
+
+static inline const char* normalizedShaderVersion(const char* source) {
+    if (!strncmp(source, "#version ", 9)) {
+        int version = (int)strtol(&source[9], NULL, 10);
+        if (shaderVersionIsEs(source)) {
+            return (version >= 300) ? "#version 300 es\n" : "#version 100\n";
+        }
+        return (version >= 130) ? "#version 300 es\n" : "#version 100\n";
+    }
+    return shaderUsesLegacySyntax(source) ? "#version 100\n" : "#version 300 es\n";
+}
+
+static inline const char* shaderBodyAfterVersion(const char* source) {
+    if (!strncmp(source, "#version ", 9)) {
+        const char* newline = strchr(source, '\n');
+        return newline ? newline + 1 : "";
+    }
+    return source;
+}
+
+static inline const char* shaderHeaderForVersion(const char* versionLine) {
+    if (!strcmp(versionLine, "#version 300 es\n")) {
+        return
+            "#extension GL_EXT_blend_func_extended : enable\n"
+            "#extension GL_EXT_draw_buffers : enable\n"
+            "#extension GL_EXT_shader_non_constant_global_initializers : enable\n"
+            "precision highp float;\n"
+            "precision highp int;\n"
+            "precision highp uint;\n"
+            "precision highp sampler2D;\n"
+            "precision highp samplerCube;\n"
+            "precision highp sampler2DArray;\n"
+            "precision highp sampler2DShadow;\n"
+            "precision highp samplerCubeShadow;\n"
+            "precision highp sampler2DArrayShadow;\n"
+            "precision highp isampler2D;\n"
+            "precision highp usampler2D;\n"
+            "precision highp isamplerCube;\n"
+            "precision highp usamplerCube;\n"
+            "precision highp isampler2DArray;\n"
+            "precision highp usampler2DArray;\n";
+    }
+    return
+        "#extension GL_EXT_blend_func_extended : enable\n"
+        "#extension GL_EXT_draw_buffers : enable\n"
+        "#extension GL_EXT_shader_non_constant_global_initializers : enable\n"
+        "precision highp float;\n"
+        "precision highp int;\n"
+        "precision highp sampler2D;\n"
+        "precision highp samplerCube;\n";
+}
+
 void glClearDepth(GLdouble depth) {
     glClearDepthf(depth);
 }
@@ -83,7 +148,7 @@ void glShaderSource(GLuint shader, GLsizei count, const GLchar * const *string, 
 
     // DBG(printf("glShaderSource(%d, %d, %p, %p)\n", shader, count, string, length);)
     char *source = NULL;
-    char *converted;
+    char *converted = NULL;
 
     // get the size of the shader sources and than concatenate in a single string
     int l = 0;
@@ -106,31 +171,14 @@ void glShaderSource(GLuint shader, GLsizei count, const GLchar * const *string, 
     if (!source2) {
         source2 = source;
     }
-    // are there #version?
-    if (!strncmp(source2, "#version ", 9)) {
-        if (!strncmp(&source2[13], "es", 2)) {
-            // This is for gl4es. TODO: maybe remove 'es' aswell?
-            return;
-        }
-        converted = strdup(source2);
-        if (converted[9] == '1') {
-            if (converted[10] - '0' < 2) {
-                // 100, 110 -> 120
-                //converted[10] = '2';
-            } else if (converted[10] - '0' < 6) {
-                // 130, 140, 150 -> 330
-                converted[9] = converted[10] = '3';
-            }
-        }
-        // remove "core", is it safe?
-        if (!strncmp(&converted[13], "core", 4)) {
-            strncpy(&converted[13], "\n//c", 4);
-        }
-    } else {
-        converted = calloc(1, strlen(source) + 13);
-        strcpy(converted, "#version 120\n");
-        strcpy(&converted[13], strdup(source));
-    }
+
+    const char* versionLine = normalizedShaderVersion(source2);
+    const char* shaderHeader = shaderHeaderForVersion(versionLine);
+    const char* shaderBody = shaderBodyAfterVersion(source2);
+    converted = calloc(1, strlen(versionLine) + strlen(shaderHeader) + strlen(shaderBody) + 1);
+    strcpy(converted, versionLine);
+    strcat(converted, shaderHeader);
+    strcat(converted, shaderBody);
 
     int convertedLen = strlen(converted);
 
@@ -154,14 +202,6 @@ void glShaderSource(GLuint shader, GLsizei count, const GLchar * const *string, 
             converted = InplaceReplace(converted, &convertedLen, tmpOutFindLine, tmpOutReplaceLine);
         }
     }
-
-    // some needed exts
-    const char* extensions =
-        "#extension GL_EXT_blend_func_extended : enable\n"
-        "#extension GL_EXT_draw_buffers : enable\n"
-        // For OptiFine (see patch above)
-        "#extension GL_EXT_shader_non_constant_global_initializers : enable\n";
-    converted = InplaceInsert(GetLine(converted, 1), extensions, converted, &convertedLen);
 
     //printf("[tinygl4angle] glShaderSource: %s\n", converted);
 
