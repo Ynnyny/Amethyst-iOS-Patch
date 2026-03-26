@@ -5,7 +5,18 @@ import java.nio.IntBuffer;
 import net.kdt.pojavlaunch.render.MetalCraftGLInterceptor;
 
 public class GL30 extends GL30C {
+    private static final int GL_DEPTH_COMPONENT24 = 0x81A6;
+    private static final int GL_DEPTH_COMPONENT32 = 0x81A7;
+    private static final int GL_DEPTH_COMPONENT32F = 0x8CAC;
+
     private GL30() {}
+
+    private static int normalizeRenderbufferInternalFormat(int internalformat) {
+        if (internalformat == GL_DEPTH_COMPONENT32 || internalformat == GL_DEPTH_COMPONENT32F) {
+            return GL_DEPTH_COMPONENT24;
+        }
+        return internalformat;
+    }
 
     public static void glBindRenderbuffer(int target, int renderbuffer) {
         MetalCraftGLInterceptor.bindRenderbuffer(target,
@@ -15,12 +26,14 @@ public class GL30 extends GL30C {
 
     public static void glRenderbufferStorage(int target, int internalformat, int width,
             int height) {
+        internalformat = normalizeRenderbufferInternalFormat(internalformat);
         MetalCraftGLInterceptor.defineRenderbuffer(internalformat, 1);
         GL30C.glRenderbufferStorage(target, internalformat, width, height);
     }
 
     public static void glRenderbufferStorageMultisample(int target, int samples,
             int internalformat, int width, int height) {
+        internalformat = normalizeRenderbufferInternalFormat(internalformat);
         MetalCraftGLInterceptor.defineRenderbuffer(internalformat, samples);
         GL30C.glRenderbufferStorageMultisample(target, samples, internalformat, width, height);
     }

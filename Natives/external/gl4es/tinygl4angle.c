@@ -54,6 +54,26 @@ void(*gles_glTexImage2D)(GLenum target, GLint level, GLint internalformat, GLsiz
 void(*gles_glTexSubImage2D)(GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const GLvoid *data);
 void(*gles_glTexParameterfv)(GLenum target, GLenum pname, const GLfloat *params);
 
+static inline int isPackedBgraType(GLenum type) {
+    return type == GL_UNSIGNED_INT_8_8_8_8 || type == GL_UNSIGNED_INT_8_8_8_8_REV;
+}
+
+static inline int isDepth32LikeInternalFormat(GLenum internalformat) {
+    return internalformat == GL_DEPTH_COMPONENT32 || internalformat == GL_DEPTH_COMPONENT32F;
+}
+
+static inline void normalizeTexImage2DParams(GLenum* internalformat, GLenum* format, GLenum* type) {
+    if (*format == GL_BGRA && isPackedBgraType(*type)) {
+        *format = GL_RGBA;
+        *type = GL_UNSIGNED_BYTE;
+    }
+
+    if (isDepth32LikeInternalFormat(*internalformat) && *format == GL_DEPTH_COMPONENT) {
+        *internalformat = GL_DEPTH_COMPONENT24;
+        *type = GL_UNSIGNED_INT;
+    }
+}
+
 void glClearDepth(GLdouble depth) {
     glClearDepthf(depth);
 }
@@ -193,9 +213,7 @@ void glGetTexLevelParameteriv(GLenum target, GLint level, GLenum pname, GLint *p
 void glTexImage2D(GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const GLvoid *data) {
     LOOKUP_FUNC(glTexImage2D)
 
-    if (type == GL_UNSIGNED_INT_8_8_8_8_REV) {
-        type = GL_UNSIGNED_BYTE;
-    }
+    normalizeTexImage2DParams(&internalformat, &format, &type);
 
     if (isProxyTexture(target)) {
         if (!maxTextureSize) {
@@ -215,9 +233,8 @@ void glTexImage2D(GLenum target, GLint level, GLint internalformat, GLsizei widt
 
 void glTexSubImage2D(GLenum target, GLint level, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height, GLenum format, GLenum type, const GLvoid *data) {
     LOOKUP_FUNC(glTexSubImage2D)
-    if (type == GL_UNSIGNED_INT_8_8_8_8_REV) {
-        type = GL_UNSIGNED_BYTE;
-    }
+    GLenum internalformat = 0;
+    normalizeTexImage2DParams(&internalformat, &format, &type);
     gles_glTexSubImage2D(target, level, xoffset, yoffset, width, height, format, type, data);
 }
 

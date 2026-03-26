@@ -8,11 +8,40 @@ import net.kdt.pojavlaunch.render.MetalCraftGLInterceptor;
 public class GL11 extends GL11C {
     private static final int GL_TEXTURE_CUBE_MAP_SEAMLESS = 0x884F;
     private static final int GL_PROGRAM_POINT_SIZE = 0x8642;
+    private static final int GL_BGRA = 0x80E1;
+    private static final int GL_UNSIGNED_INT_8_8_8_8 = 0x8035;
+    private static final int GL_UNSIGNED_INT_8_8_8_8_REV = 0x8367;
+    private static final int GL_DEPTH_COMPONENT = 0x1902;
+    private static final int GL_DEPTH_COMPONENT24 = 0x81A6;
+    private static final int GL_DEPTH_COMPONENT32 = 0x81A7;
+    private static final int GL_DEPTH_COMPONENT32F = 0x8CAC;
+    private static final int GL_FLOAT = 0x1406;
+    private static final int GL_UNSIGNED_INT = 0x1405;
 
     private GL11() {}
 
     private static boolean shouldIgnoreCapability(int cap) {
         return cap == GL_TEXTURE_CUBE_MAP_SEAMLESS || cap == GL_PROGRAM_POINT_SIZE;
+    }
+
+    private static boolean isPackedBgraType(int type) {
+        return type == GL_UNSIGNED_INT_8_8_8_8 || type == GL_UNSIGNED_INT_8_8_8_8_REV;
+    }
+
+    private static boolean isDepth32LikeInternalFormat(int internalformat) {
+        return internalformat == GL_DEPTH_COMPONENT32 || internalformat == GL_DEPTH_COMPONENT32F;
+    }
+
+    private static int[] normalizeTexImage2DParams(int internalformat, int format, int type) {
+        if (format == GL_BGRA && isPackedBgraType(type)) {
+            format = GL_RGBA;
+            type = GL_UNSIGNED_BYTE;
+        }
+        if (isDepth32LikeInternalFormat(internalformat) && format == GL_DEPTH_COMPONENT) {
+            internalformat = GL_DEPTH_COMPONENT24;
+            type = GL_UNSIGNED_INT;
+        }
+        return new int[] {internalformat, format, type};
     }
 
     public static void glEnable(int cap) {
@@ -68,6 +97,10 @@ public class GL11 extends GL11C {
 
     public static void glTexImage2D(int target, int level, int internalformat, int width,
             int height, int border, int format, int type, ByteBuffer pixels) {
+        int[] normalized = normalizeTexImage2DParams(internalformat, format, type);
+        internalformat = normalized[0];
+        format = normalized[1];
+        type = normalized[2];
         MetalCraftGLInterceptor.defineTexture(target, internalformat, 1);
         GL11C.glTexImage2D(target, level, internalformat, width, height, border, format, type,
                 pixels);
@@ -75,8 +108,30 @@ public class GL11 extends GL11C {
 
     public static void glTexImage2D(int target, int level, int internalformat, int width,
             int height, int border, int format, int type, long pixels) {
+        int[] normalized = normalizeTexImage2DParams(internalformat, format, type);
+        internalformat = normalized[0];
+        format = normalized[1];
+        type = normalized[2];
         MetalCraftGLInterceptor.defineTexture(target, internalformat, 1);
         GL11C.glTexImage2D(target, level, internalformat, width, height, border, format, type,
+                pixels);
+    }
+
+    public static void glTexSubImage2D(int target, int level, int xoffset, int yoffset, int width,
+            int height, int format, int type, ByteBuffer pixels) {
+        int[] normalized = normalizeTexImage2DParams(0, format, type);
+        format = normalized[1];
+        type = normalized[2];
+        GL11C.glTexSubImage2D(target, level, xoffset, yoffset, width, height, format, type,
+                pixels);
+    }
+
+    public static void glTexSubImage2D(int target, int level, int xoffset, int yoffset, int width,
+            int height, int format, int type, long pixels) {
+        int[] normalized = normalizeTexImage2DParams(0, format, type);
+        format = normalized[1];
+        type = normalized[2];
+        GL11C.glTexSubImage2D(target, level, xoffset, yoffset, width, height, format, type,
                 pixels);
     }
 
