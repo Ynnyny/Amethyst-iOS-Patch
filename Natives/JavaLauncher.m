@@ -22,6 +22,101 @@
 
 extern char **environ;
 
+static BOOL nameLooksLikeKnownSodiumRendererMod(NSString *name) {
+    if (name.length == 0) {
+        return NO;
+    }
+
+    NSString *lowercaseName = name.lowercaseString;
+    if (![lowercaseName.pathExtension isEqualToString:@"jar"]) {
+        return NO;
+    }
+
+    NSArray<NSString *> *markers = @[@"sodium", @"embeddium", @"rubidium", @"magnesium"];
+    for (NSString *marker in markers) {
+        if ([lowercaseName containsString:marker]) {
+            return YES;
+        }
+    }
+
+    return NO;
+}
+
+static BOOL directoryContainsKnownSodiumRendererMod(NSString *modsDirectory) {
+    BOOL isDirectory = NO;
+    if (![fm fileExistsAtPath:modsDirectory isDirectory:&isDirectory] || !isDirectory) {
+        return NO;
+    }
+
+    NSDirectoryEnumerator<NSString *> *enumerator = [fm enumeratorAtPath:modsDirectory];
+    for (NSString *relativePath in enumerator) {
+        if (nameLooksLikeKnownSodiumRendererMod(relativePath.lastPathComponent)) {
+            return YES;
+        }
+    }
+
+    return NO;
+}
+
+static BOOL launchTargetContainsKnownSodiumRendererLibrary(NSDictionary *launchTarget) {
+    NSArray<NSDictionary *> *libraries = launchTarget[@"libraries"];
+    if (![libraries isKindOfClass:NSArray.class]) {
+        return NO;
+    }
+
+    for (NSDictionary *library in libraries) {
+        NSString *name = library[@"name"];
+        if (nameLooksLikeKnownSodiumRendererMod(name.lastPathComponent) ||
+            [name.lowercaseString containsString:@"sodium"] ||
+            [name.lowercaseString containsString:@"embeddium"] ||
+            [name.lowercaseString containsString:@"rubidium"] ||
+            [name.lowercaseString containsString:@"magnesium"]) {
+            return YES;
+        }
+    }
+
+    return NO;
+}
+
+static BOOL currentInstanceUsesKnownSodiumRendererMod(NSString *gameDir, NSDictionary *launchTarget) {
+    if (directoryContainsKnownSodiumRendererMod([gameDir stringByAppendingPathComponent:@"mods"])) {
+        return YES;
+    }
+
+    return launchTargetContainsKnownSodiumRendererLibrary(launchTarget);
+}
+
+static void resetManagedMobileGluesEnv(void) {
+    unsetenv("AMETHYST_SODIUM_COMPAT");
+    unsetenv("AMETHYST_MG_FAKE_NATIVE_STRINGS");
+    unsetenv("AMETHYST_MG_IGNORE_ERROR");
+    unsetenv("AMETHYST_MG_EXT_COMPUTE_SHADER");
+    unsetenv("AMETHYST_MG_EXT_TIMER_QUERY");
+    unsetenv("AMETHYST_MG_EXT_DIRECT_STATE_ACCESS");
+    unsetenv("AMETHYST_MG_MULTIDRAW_MODE");
+    unsetenv("AMETHYST_MG_GL_VERSION");
+    unsetenv("AMETHYST_MG_HIDE_ENV_LEVEL");
+}
+
+static void configureManagedMobileGluesEnv(BOOL sodiumCompat, BOOL useMetalCraft) {
+    resetManagedMobileGluesEnv();
+
+    if (sodiumCompat) {
+        setenv("AMETHYST_SODIUM_COMPAT", "1", 1);
+        setenv("AMETHYST_MG_IGNORE_ERROR", "0", 1);
+        setenv("AMETHYST_MG_EXT_COMPUTE_SHADER", "0", 1);
+        setenv("AMETHYST_MG_EXT_TIMER_QUERY", "1", 1);
+        setenv("AMETHYST_MG_EXT_DIRECT_STATE_ACCESS", "1", 1);
+        setenv("AMETHYST_MG_MULTIDRAW_MODE", "4", 1);
+        setenv("AMETHYST_MG_GL_VERSION", "40", 1);
+        setenv("AMETHYST_MG_HIDE_ENV_LEVEL", "0", 1);
+    }
+
+    if (sodiumCompat || useMetalCraft) {
+        setenv("AMETHYST_MG_FAKE_NATIVE_STRINGS", "1", 1);
+    }
+}
+
 BOOL validateVirtualMemorySpace(size_t size) {
     size <<= 20; // convert to MB
     void *map = mmap(0, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
@@ -185,13 +280,33 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
             defaultJRETag = @"1_17_newer";
         }
 
+        // Setup gameDir
+        gameDir = [NSString stringWithFormat:@"%s/instances/%@/%@",
+            getenv("POJAV_HOME"), getPrefObject(@"general.game_directory"),
+            [PLProfiles resolveKeyForCurrentProfile:@"gameDir"]]
+            .stringByStandardizingPath;
+
         // Setup POJAV_RENDERER
         NSString *requestedRenderer = [PLProfiles resolveKeyForCurrentProfile:@"renderer"];
         if (requestedRenderer.length == 0) {
             requestedRenderer = @"auto";
         }
-        NSString *backendRenderer = requestedRenderer;
+
+        BOOL sodiumCompat = currentInstanceUsesKnownSodiumRendererMod(gameDir, launchTarget);
+        if (sodiumCompat &&
+            ([requestedRenderer isEqualToString:@"auto"] ||
+             [requestedRenderer isEqualToString:@ RENDERER_NAME_GL4ES] ||
+             [requestedRenderer isEqualToString:@ RENDERER_NAME_MTL_ANGLE] ||
+             [requestedRenderer isEqualToString:@ RENDERER_NAME_KRYPTON_WRAPPER])) {
+            NSLog(@"[JavaLauncher] Sodium-compatible launch detected, overriding renderer %@ -> %s",
+                  requestedRenderer, RENDERER_NAME_MOBILEGLUES);
+            requestedRenderer = @ RENDERER_NAME_MOBILEGLUES;
+        }
+
         BOOL useMetalCraft = [requestedRenderer isEqualToString:@ RENDERER_NAME_METALCRAFT];
+        configureManagedMobileGluesEnv(sodiumCompat, useMetalCraft);
+
+        NSString *backendRenderer = requestedRenderer;
         if (useMetalCraft) {
             const char *existingBackendRenderer = getenv("POJAV_RENDERER_BACKEND");
             if (existingBackendRenderer != NULL &&
@@ -206,15 +321,10 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
         } else {
             unsetenv("POJAV_METALCRAFT_ENABLED");
         }
-        NSLog(@"[JavaLauncher] RENDERER is set to %@ (backend: %@)\n", requestedRenderer,
-              backendRenderer);
+        NSLog(@"[JavaLauncher] RENDERER is set to %@ (backend: %@, sodiumCompat: %@)\n",
+              requestedRenderer, backendRenderer, sodiumCompat ? @"YES" : @"NO");
         setenv("AMETHYST_RENDERER", requestedRenderer.UTF8String, 1);
         setenv("POJAV_RENDERER_BACKEND", backendRenderer.UTF8String, 1);
-        // Setup gameDir
-        gameDir = [NSString stringWithFormat:@"%s/instances/%@/%@",
-            getenv("POJAV_HOME"), getPrefObject(@"general.game_directory"),
-            [PLProfiles resolveKeyForCurrentProfile:@"gameDir"]]
-            .stringByStandardizingPath;
     } else {
         defaultJRETag = @"execute_jar";
         gameDir = @(getenv("POJAV_GAME_DIR"));
