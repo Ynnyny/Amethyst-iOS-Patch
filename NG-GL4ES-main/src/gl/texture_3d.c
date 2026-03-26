@@ -88,6 +88,11 @@ void APIENTRY_GL4ES gl4es_glTexImage3D(GLenum target, GLint level, GLint interna
 
     internal_convert(&internalformat, &type, &format);
 
+    if (data == NULL && !isDXTc(internalformat) && internalformat != GL_COMPRESSED_RGB &&
+        internalformat != GL_COMPRESSED_RGBA) {
+        gl4es_pick_tex_storage_upload(internalformat, &format, &type);
+    }
+
     if (data == NULL && (internalformat == GL_RGB16F || internalformat == GL_RGBA16F))
         internal2format_type(&internalformat, &format, &type);
     if (internalformat == GL_R16F) internal2format_type(&internalformat, &format, &type);

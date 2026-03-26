@@ -1552,6 +1552,11 @@ void APIENTRY_GL4ES gl4es_glTexImage2D(GLenum target, GLint level, GLint interna
 
     internal_convert((GLenum*)&internalformat, &type, &format);
 
+    if (data == NULL && !isDXTc(internalformat) && !is_fake_compressed_rgb(internalformat) &&
+        !is_fake_compressed_rgba(internalformat)) {
+        gl4es_pick_tex_storage_upload(internalformat, &format, &type);
+    }
+
     if (data == NULL && (internalformat == GL_RGB16F || internalformat == GL_RGBA16F))
         internal2format_type((GLenum*)&internalformat, &format, &type);
     if (internalformat == GL_R16F) internal2format_type((GLenum*)&internalformat, &format, &type);
