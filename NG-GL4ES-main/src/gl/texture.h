@@ -92,6 +92,7 @@ extern "C"
     void internal2format_type(GLenum* internalformat, GLenum* format, GLenum* type);
     void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format);
     void gl4es_pick_tex_storage_upload(GLenum internalformat, GLenum* format, GLenum* type);
+    void gl4es_normalize_storage_allocation(GLenum* internalformat, GLenum* format, GLenum* type);
     GLenum swizzle_internalformat(GLenum* internalformat, GLenum format, GLenum type);
 
     int npot(int n);

@@ -104,6 +104,18 @@ void APIENTRY_GL4ES gl4es_glTexImage3D(GLenum target, GLint level, GLint interna
         type = GL_UNSIGNED_INT_24_8;
     }
 
+    if (data == NULL) {
+        const GLenum original_internalformat = internalformat;
+        const GLenum original_format = format;
+        const GLenum original_type = type;
+        gl4es_normalize_storage_allocation(&internalformat, &format, &type);
+        if (original_internalformat != internalformat || original_format != format || original_type != type) {
+            SHUT_LOGD("[KryptonCompat] Storage fallback 3D %s/%s/%s -> %s/%s/%s",
+                      PrintEnum(original_internalformat), PrintEnum(original_format), PrintEnum(original_type),
+                      PrintEnum(internalformat), PrintEnum(format), PrintEnum(type));
+        }
+    }
+
     const GLuint itarget = what_target(target);
     const GLuint rtarget = map_tex_target(target);
 

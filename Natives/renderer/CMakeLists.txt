@@ -25,7 +25,6 @@ set(METALCRAFT_SPIRVCROSS_DIR "${METALCRAFT_EXTERNAL_DIR}/3rdparty/SPIRV-Cross")
 
 set(METALCRAFT_CORE_SOURCES
   src/IndirectCommandStream.cpp
-  src/JNIBridge.cpp
   src/RenderDeviceFactory.cpp
   src/RingBuffer.cpp
   src/StateTracker.cpp
@@ -85,6 +84,7 @@ endif()
 
 if(APPLE)
   add_library(MetalCraft SHARED
+    src/JNIBridge.cpp
     src/apple/MetalBuffer.mm
     src/apple/MetalCommandEncoder.mm
     src/apple/MetalDepthStencilManager.mm

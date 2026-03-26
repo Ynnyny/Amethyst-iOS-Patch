@@ -258,6 +258,56 @@ void gl4es_pick_tex_storage_upload(GLenum internalformat, GLenum* format, GLenum
     }
 }
 
+void gl4es_normalize_storage_allocation(GLenum* internalformat, GLenum* format, GLenum* type) {
+    if (!internalformat || !format || !type) return;
+
+    switch (*internalformat) {
+    case GL_DEPTH_COMPONENT:
+    case GL_DEPTH_COMPONENT24:
+    case GL_DEPTH_COMPONENT32:
+    case GL_DEPTH_COMPONENT32F:
+        if (hardext.depth24) {
+            *internalformat = GL_DEPTH_COMPONENT24;
+            *format = GL_DEPTH_COMPONENT;
+            *type = GL_UNSIGNED_INT;
+        } else {
+            *internalformat = GL_DEPTH_COMPONENT16;
+            *format = GL_DEPTH_COMPONENT;
+            *type = GL_UNSIGNED_SHORT;
+        }
+        break;
+    case GL_DEPTH_STENCIL:
+    case GL_DEPTH24_STENCIL8:
+    case GL_DEPTH32F_STENCIL8:
+        if (hardext.depthstencil) {
+            *internalformat = GL_DEPTH24_STENCIL8;
+            *format = GL_DEPTH_STENCIL;
+            *type = GL_UNSIGNED_INT_24_8;
+        } else if (hardext.depth24) {
+            *internalformat = GL_DEPTH_COMPONENT24;
+            *format = GL_DEPTH_COMPONENT;
+            *type = GL_UNSIGNED_INT;
+        } else {
+            *internalformat = GL_DEPTH_COMPONENT16;
+            *format = GL_DEPTH_COMPONENT;
+            *type = GL_UNSIGNED_SHORT;
+        }
+        break;
+    case GL_SRGB8:
+        *internalformat = GL_RGB8;
+        *format = GL_RGB;
+        *type = GL_UNSIGNED_BYTE;
+        break;
+    case GL_SRGB8_ALPHA8:
+        *internalformat = GL_RGBA8;
+        *format = GL_RGBA;
+        *type = GL_UNSIGNED_BYTE;
+        break;
+    default:
+        break;
+    }
+}
+
 // The real function to convert format
 void internal_convert(GLenum* internal_format, GLenum* type, GLenum* format) {
     if (format && (*format == GL_BGRA || *format == GL_BGR || *format == GL_BGRA8_EXT)) return;
@@ -1566,6 +1616,18 @@ void APIENTRY_GL4ES gl4es_glTexImage2D(GLenum target, GLint level, GLint interna
     if (internalformat == GL_DEPTH32F_STENCIL8 && type == GL_FLOAT_32_UNSIGNED_INT_24_8_REV) {
         internalformat = GL_DEPTH24_STENCIL8;
         type = GL_UNSIGNED_INT_24_8;
+    }
+
+    if (data == NULL) {
+        const GLenum original_internalformat = internalformat;
+        const GLenum original_format = format;
+        const GLenum original_type = type;
+        gl4es_normalize_storage_allocation((GLenum*)&internalformat, &format, &type);
+        if (original_internalformat != internalformat || original_format != format || original_type != type) {
+            SHUT_LOGD("[KryptonCompat] Storage fallback %s/%s/%s -> %s/%s/%s", PrintEnum(original_internalformat),
+                      PrintEnum(original_format), PrintEnum(original_type), PrintEnum(internalformat),
+                      PrintEnum(format), PrintEnum(type));
+        }
     }
 
     // proxy case

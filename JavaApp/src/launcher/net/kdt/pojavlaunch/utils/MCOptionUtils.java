@@ -23,6 +23,8 @@ public class MCOptionUtils
                 mLineList.add(line);
             }
             reader.close();
+        } catch (FileNotFoundException e) {
+            // First launch is expected to not have an options file yet.
         } catch (IOException e) {
             System.err.println("Could not load options.txt");
             e.printStackTrace();
