@@ -183,6 +183,35 @@
     [task resume];
 }
 
+- (void)downloadLoggingConfigWithSuccess:(void (^)())success {
+    NSDictionary *loggingFile = self.metadata[@"logging"][@"client"][@"file"];
+    NSString *fileId = loggingFile[@"id"];
+    NSString *url = loggingFile[@"url"];
+    if (fileId.length == 0 || url.length == 0) {
+        success();
+        return;
+    }
+
+    NSString *path = [@(getenv("POJAV_GAME_DIR")) stringByAppendingPathComponent:fileId];
+    NSString *sha = loggingFile[@"sha1"];
+    NSUInteger size = [loggingFile[@"size"] unsignedLongLongValue];
+    NSURLSessionDownloadTask *task = [self createDownloadTask:url
+                                                         size:size
+                                                          sha:sha
+                                                      altName:fileId
+                                                       toPath:path
+                                                      success:^{
+        if (![self shouldAbortDownloadFlow]) {
+            success();
+        }
+    }];
+    if (task) {
+        [task resume];
+    } else if (![self shouldAbortDownloadFlow]) {
+        success();
+    }
+}
+
 - (NSArray *)downloadClientLibraries {
     NSMutableArray *tasks = [NSMutableArray new];
     for (NSDictionary *library in self.metadata[@"libraries"]) {
@@ -263,32 +292,37 @@
         if ([self shouldAbortDownloadFlow]) {
             return;
         }
-        [self downloadAssetMetadataWithSuccess:^{
+        [self downloadLoggingConfigWithSuccess:^{
             if ([self shouldAbortDownloadFlow]) {
                 return;
             }
-            NSArray *libTasks = [self downloadClientLibraries];
-            if ([self shouldAbortDownloadFlow]) {
-                return;
-            }
-            NSArray *assetTasks = [self downloadClientAssets];
-            if ([self shouldAbortDownloadFlow]) {
-                return;
-            }
-            // Drop the 1 byte we set initially
-            self.progress.totalUnitCount--;
-            self.textProgress.totalUnitCount--;
-            if (self.progress.totalUnitCount == 0) {
-                // We have nothing to download, invoke completion observer
-                self.progress.totalUnitCount = 1;
-                self.progress.completedUnitCount = 1;
-                self.textProgress.totalUnitCount = 1;
-                self.textProgress.completedUnitCount = 1;
-                return;
-            }
-            [libTasks makeObjectsPerformSelector:@selector(resume)];
-            [assetTasks makeObjectsPerformSelector:@selector(resume)];
-            [self.metadata removeObjectForKey:@"assetIndexObj"];
+            [self downloadAssetMetadataWithSuccess:^{
+                if ([self shouldAbortDownloadFlow]) {
+                    return;
+                }
+                NSArray *libTasks = [self downloadClientLibraries];
+                if ([self shouldAbortDownloadFlow]) {
+                    return;
+                }
+                NSArray *assetTasks = [self downloadClientAssets];
+                if ([self shouldAbortDownloadFlow]) {
+                    return;
+                }
+                // Drop the 1 byte we set initially
+                self.progress.totalUnitCount--;
+                self.textProgress.totalUnitCount--;
+                if (self.progress.totalUnitCount == 0) {
+                    // We have nothing to download, invoke completion observer
+                    self.progress.totalUnitCount = 1;
+                    self.progress.completedUnitCount = 1;
+                    self.textProgress.totalUnitCount = 1;
+                    self.textProgress.completedUnitCount = 1;
+                    return;
+                }
+                [libTasks makeObjectsPerformSelector:@selector(resume)];
+                [assetTasks makeObjectsPerformSelector:@selector(resume)];
+                [self.metadata removeObjectForKey:@"assetIndexObj"];
+            }];
         }];
     }];
 }

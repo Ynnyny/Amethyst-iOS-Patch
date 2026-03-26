@@ -109,7 +109,8 @@ public class PojavLauncher {
         JMinecraftVersionList.Version version = Tools.getVersionInfo(args[1]);
         System.out.println("Launching Minecraft " + version.id);
         String configPath;
-        if (version.logging != null) {
+        if (version.logging != null && version.logging.client != null && version.logging.client.file != null
+                && version.logging.client.file.id != null) {
             if (version.logging.client.file.id.equals("client-1.12.xml")) {
                 configPath = Tools.DIR_BUNDLE + "/log4j-rce-patch-1.12.xml";
             } else if (version.logging.client.file.id.equals("client-1.7.xml")) {
@@ -117,7 +118,12 @@ public class PojavLauncher {
             } else {
                 configPath = Tools.DIR_GAME_NEW + "/" + version.logging.client.file.id;
             }
-            System.setProperty("log4j.configurationFile", configPath);
+            File configFile = new File(configPath);
+            if (configFile.isFile()) {
+                System.setProperty("log4j.configurationFile", configFile.getAbsolutePath());
+            } else {
+                System.out.println("[Log4j] Logging configuration missing, using default: " + configPath);
+            }
         }
 
         Tools.launchMinecraft(account, version);

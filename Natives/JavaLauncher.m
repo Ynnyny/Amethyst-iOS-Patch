@@ -58,15 +58,19 @@ void init_loadCustomEnv() {
     if (envvars == nil) return;
     NSLog(@"[JavaLauncher] Reading custom environment variables");
     for (NSString *line in [envvars componentsSeparatedByCharactersInSet:NSCharacterSet.whitespaceCharacterSet]) {
-        if (![line containsString:@"="]) {
-            NSLog(@"[JavaLauncher] Warning: skipped empty value custom env variable: %@", line);
+        NSString *trimmedLine = [line stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+        if (trimmedLine.length == 0) {
             continue;
         }
-        NSRange range = [line rangeOfString:@"="];
-        NSString *key = [line substringToIndex:range.location];
-        NSString *value = [line substringFromIndex:range.location+range.length];
+        if (![trimmedLine containsString:@"="]) {
+            NSLog(@"[JavaLauncher] Warning: skipped malformed custom env variable: %@", trimmedLine);
+            continue;
+        }
+        NSRange range = [trimmedLine rangeOfString:@"="];
+        NSString *key = [trimmedLine substringToIndex:range.location];
+        NSString *value = [trimmedLine substringFromIndex:range.location+range.length];
         setenv(key.UTF8String, value.UTF8String, 1);
-        NSLog(@"[JavaLauncher] Added custom env variable: %@", line);
+        NSLog(@"[JavaLauncher] Added custom env variable: %@", trimmedLine);
     }
 }
 
@@ -104,6 +108,7 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
 
     BOOL requiresTXMWorkaround = DeviceRequiresTXMWorkaround();
     BOOL jit26AlwaysAttached = getPrefBool(@"debug.debug_always_attached_jit");
+    BOOL requiresBootstrapLauncherExport = NO;
     if (requiresTXMWorkaround) {
         static void *result;
         if(!result) result = JIT26CreateRegionLegacy(getpagesize());
@@ -153,6 +158,17 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     NSString *defaultJRETag;
     NSCAssert(launchTarget, @"Unexpected nil launchTarget");
     if ([launchTarget isKindOfClass:NSDictionary.class]) {
+        NSString *mainClass = launchTarget[@"mainClass"];
+        requiresBootstrapLauncherExport = [mainClass isEqualToString:@"cpw.mods.bootstraplauncher.BootstrapLauncher"];
+        if (!requiresBootstrapLauncherExport) {
+            for (NSDictionary *library in launchTarget[@"libraries"]) {
+                NSString *name = library[@"name"];
+                if ([name containsString:@"cpw.mods:bootstraplauncher"]) {
+                    requiresBootstrapLauncherExport = YES;
+                    break;
+                }
+            }
+        }
         // Get preferred Java version from current profile
         int preferredJavaVersion = [PLProfiles resolveKeyForCurrentProfile:@"javaVersion"].intValue;
         if (preferredJavaVersion > 0) {
@@ -374,8 +390,10 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
         margv[++margc] = "--add-opens=java.desktop/sun.java2d=ALL-UNNAMED";
         margv[++margc] = "--add-opens=java.base/java.lang.reflect=ALL-UNNAMED";
 
-        // TODO: workaround, will be removed once the startup part works without PLaunchApp
-        margv[++margc] = "--add-exports=cpw.mods.bootstraplauncher/cpw.mods.bootstraplauncher=ALL-UNNAMED";
+        if (requiresBootstrapLauncherExport) {
+            // Required by Forge-style bootstrap launchers on Java 17+
+            margv[++margc] = "--add-exports=cpw.mods.bootstraplauncher/cpw.mods.bootstraplauncher=ALL-UNNAMED";
+        }
     }
 
     // Add Caciocavallo bootclasspath
