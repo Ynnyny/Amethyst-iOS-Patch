@@ -665,6 +665,21 @@ static char* replace_version_to_es(const char* text, int esversion) {
     return strdup(text);
 }
 
+static char* normalize_shader_source_for_es(const char* text, int esversion) {
+    if (!text) return NULL;
+
+    char* trimmed = strdup(text);
+    if (!trimmed) return NULL;
+
+    remove_before_version(trimmed);
+    char* normalized = replace_version_to_es(trimmed, esversion);
+    if (normalized) {
+        free(trimmed);
+        return normalized;
+    }
+    return trimmed;
+}
+
 void set_es_version();
 void APIENTRY_GL4ES gl4es_glShaderSource(GLuint shader, GLsizei count, const GLchar* const* string,
                                          const GLint* length) {
@@ -707,6 +722,8 @@ void APIENTRY_GL4ES gl4es_glShaderSource(GLuint shader, GLsizei count, const GLc
         // adapt shader if needed (i.e. not an es2 context and shader is not #version 100)
         if (is_direct_shader(glshader->source)) {
             glshader->converted = strdup(glshader->source);
+            glshader->is_converted_essl_320 =
+                (globals4es.es >= 3 && globals4es.esversion >= 300 && getGLSLVersion(glshader->source) >= 300) ? 1 : 0;
         } else {
             int glsl_version = getGLSLVersion(glshader->source);
             DBG(SHUT_LOGD("[INFO] [Shader] Shader source: "))
@@ -723,46 +740,64 @@ void APIENTRY_GL4ES gl4es_glShaderSource(GLuint shader, GLsizei count, const GLc
                 if (check_version_compatibility(glshader->source)) {
                     // bool isBSL = first_three_lines_contains_BSL(glshader->source);
                     bool isBuiltInVariableConverted = is_glsl_builtin_converted(glshader->source);
-                    remove_before_version(glshader->source);
-                    char* convertedSource = glshader->source;
-                    if (!isBuiltInVariableConverted)
+                    char* convertedSource = strdup(glshader->source);
+                    if (convertedSource) remove_before_version(convertedSource);
+                    if (convertedSource && !isBuiltInVariableConverted)
                         convertedSource = ConvertShaderBuiltInVariableOnly(
                             convertedSource, glshader->type == GL_VERTEX_SHADER ? 1 : 0, &glshader->need,
                             isBuiltInVariableConverted ? 0 : 1);
-                    free(glshader->source);
-                    if (glshader->type == GL_FRAGMENT_SHADER) {
-                        if (contains_glFragColor(glshader->source)) {
-                            convertedSource = replace_glFragColor(convertedSource);
-                            convertedSource = insert_gl_FragColor_if_missing(convertedSource);
+                    if (convertedSource && glshader->type == GL_FRAGMENT_SHADER) {
+                        if (contains_glFragColor(convertedSource)) {
+                            char* replacedFragColor = replace_glFragColor(convertedSource);
+                            free(convertedSource);
+                            convertedSource = replacedFragColor;
+                            if (convertedSource) {
+                                char* withOutput = insert_gl_FragColor_if_missing(convertedSource);
+                                free(convertedSource);
+                                convertedSource = withOutput;
+                            }
                         } else {
                             int sourceLength = strlen(convertedSource) + 1;
                             convertedSource = ReplaceGLFragData(convertedSource, &sourceLength);
                         }
                     }
-                    if (!isBuiltInVariableConverted) convertedSource = mark_glsl_builtin_converted(convertedSource);
-                    glshader->source = strdup(convertedSource);
-                    convertedSource = replace_version_line_460(convertedSource);
+                    if (convertedSource && !isBuiltInVariableConverted) {
+                        char* markedSource = mark_glsl_builtin_converted(convertedSource);
+                        free(convertedSource);
+                        convertedSource = markedSource;
+                    }
+                    free(glshader->source);
+                    glshader->source = convertedSource ? strdup(convertedSource) : NULL;
+                    char* sourceForCompiler = convertedSource ? replace_version_line_460(convertedSource) : NULL;
                     int returnCode = 0; // TODO: handle returnCode
-                    char* result = GLSLtoGLSLES_c(convertedSource, glshader->type, globals4es.esversion, glsl_version,
-                                                  &returnCode);
-                    free(convertedSource);
+                    char* result =
+                        GLSLtoGLSLES_c(sourceForCompiler ? sourceForCompiler : glshader->source, glshader->type,
+                                       globals4es.esversion, glsl_version, &returnCode);
+                    if (sourceForCompiler) free(sourceForCompiler);
                     glshader->converted =
                         strdup(result != NULL ? process_uniform_declarations(result, glshader->uniforms_declarations,
                                                                              &glshader->uniforms_declarations_count)
                                               : ConvertShaderConditionally(glshader));
+                    if (result) free(result);
                     glshader->converted = process_uniform_declarations(
                         glshader->converted, glshader->uniforms_declarations, &glshader->uniforms_declarations_count);
 
                     /*if (isBSL)*/ glshader->converted = bsl_patch(glshader->converted);
                     glshader->is_converted_essl_320 = 0;
+                    if (convertedSource) free(convertedSource);
                 } else {
+                    char* sourceForConversion = strdup(glshader->source);
+                    if (sourceForConversion) remove_before_version(sourceForConversion);
                     int returnCode = 0; // TODO: handle returnCode
-                    char* result = GLSLtoGLSLES_c(glshader->source, glshader->type, globals4es.esversion, glsl_version,
-                                                  &returnCode);
+                    char* result =
+                        GLSLtoGLSLES_c(sourceForConversion ? sourceForConversion : glshader->source, glshader->type,
+                                       globals4es.esversion, glsl_version, &returnCode);
                     glshader->converted =
                         strdup(result != NULL ? process_uniform_declarations(result, glshader->uniforms_declarations,
                                                                              &glshader->uniforms_declarations_count)
                                               : ConvertShaderConditionally(glshader));
+                    if (sourceForConversion) free(sourceForConversion);
+                    if (result) free(result);
                     glshader->is_converted_essl_320 = 1;
                 }
             }
@@ -772,7 +807,7 @@ void APIENTRY_GL4ES gl4es_glShaderSource(GLuint shader, GLsizei count, const GLc
         GLchar* finalSource = (glshader->converted) ? glshader->converted : glshader->source;
         char* tempSource = NULL;
         if (globals4es.es >= 3 && globals4es.esversion >= 300 && glshader->is_converted_essl_320) {
-            char* esSource = replace_version_to_es(finalSource, globals4es.esversion);
+            char* esSource = normalize_shader_source_for_es(finalSource, globals4es.esversion);
             if (esSource) {
                 tempSource = esSource;
                 finalSource = esSource;
@@ -833,9 +868,11 @@ void redoShader(GLuint shader, shaderconv_need_t* need) {
     if (memcmp(&glshader->need, need, sizeof(shaderconv_need_t)) == 0) return;
     free(glshader->converted);
     memcpy(&glshader->need, need, sizeof(shaderconv_need_t));
-    if (is_direct_shader(glshader->source))
+    if (is_direct_shader(glshader->source)) {
         glshader->converted = strdup(glshader->source);
-    else {
+        glshader->is_converted_essl_320 =
+            (globals4es.es >= 3 && globals4es.esversion >= 300 && getGLSLVersion(glshader->source) >= 300) ? 1 : 0;
+    } else {
         int glsl_version = getGLSLVersion(glshader->source);
         DBG(SHUT_LOGD("[INFO] [Shader] Shader source: "))
         DBG(SHUT_LOGD("%s", glshader->source))
@@ -844,19 +881,29 @@ void redoShader(GLuint shader, shaderconv_need_t* need) {
             glshader->is_converted_essl_320 = 0;
         } else {
             int returnCode = 0;
-            char* result =
-                GLSLtoGLSLES_c(glshader->source, glshader->type, globals4es.esversion, glsl_version, &returnCode);
+            char* sourceForConversion = strdup(glshader->source);
+            if (sourceForConversion) remove_before_version(sourceForConversion);
+            char* result = GLSLtoGLSLES_c(sourceForConversion ? sourceForConversion : glshader->source, glshader->type,
+                                          globals4es.esversion, glsl_version, &returnCode);
             glshader->converted =
                 strdup(result != NULL ? process_uniform_declarations(result, glshader->uniforms_declarations,
                                                                      &glshader->uniforms_declarations_count)
                                       : ConvertShaderConditionally(glshader));
+            if (sourceForConversion) free(sourceForConversion);
+            if (result) free(result);
             glshader->is_converted_essl_320 = 1;
         }
         DBG(SHUT_LOGD("\n[INFO] [Shader] Converted Shader source: \n%s", glshader->converted))
     }
     // send source to GLES2 hardware if any
-    gles_glShaderSource(
-        shader, 1, (const GLchar* const*)((glshader->converted) ? (&glshader->converted) : (&glshader->source)), NULL);
+    const GLchar* shaderSource = glshader->converted ? glshader->converted : glshader->source;
+    char* normalizedSource = NULL;
+    if (globals4es.es >= 3 && globals4es.esversion >= 300 && glshader->is_converted_essl_320) {
+        normalizedSource = normalize_shader_source_for_es(shaderSource, globals4es.esversion);
+        if (normalizedSource) shaderSource = normalizedSource;
+    }
+    gles_glShaderSource(shader, 1, &shaderSource, NULL);
+    if (normalizedSource) free(normalizedSource);
     // recompile...
     gl4es_glCompileShader(glshader->id);
 }
