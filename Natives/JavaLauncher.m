@@ -292,16 +292,9 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
             requestedRenderer = @"auto";
         }
 
-        BOOL sodiumCompat = currentInstanceUsesKnownSodiumRendererMod(gameDir, launchTarget);
-        if (sodiumCompat &&
-            ([requestedRenderer isEqualToString:@"auto"] ||
-             [requestedRenderer isEqualToString:@ RENDERER_NAME_GL4ES] ||
-             [requestedRenderer isEqualToString:@ RENDERER_NAME_MTL_ANGLE] ||
-             [requestedRenderer isEqualToString:@ RENDERER_NAME_KRYPTON_WRAPPER])) {
-            NSLog(@"[JavaLauncher] Sodium-compatible launch detected, overriding renderer %@ -> %s",
-                  requestedRenderer, RENDERER_NAME_MOBILEGLUES);
-            requestedRenderer = @ RENDERER_NAME_MOBILEGLUES;
-        }
+// Removed automatic renderer override for Sodium compatibility per user request
+// Sodium will now work with any renderer without forcing MobileGlues
+BOOL sodiumCompat = currentInstanceUsesKnownSodiumRendererMod(gameDir, launchTarget);
 
         BOOL useMetalCraft = [requestedRenderer isEqualToString:@ RENDERER_NAME_METALCRAFT];
         configureManagedMobileGluesEnv(sodiumCompat, useMetalCraft);

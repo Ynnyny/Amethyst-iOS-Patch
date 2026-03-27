@@ -99,7 +99,9 @@ int pojavInitOpenGL() {
         if (renderer.length == 0 ||
             [renderer isEqualToString:@"auto"] ||
             [renderer isEqualToString:requestedRenderer]) {
-            renderer = @ RENDERER_NAME_METALCRAFT_BACKEND;
+            // Keep MetalCraft's backend as MetalCraft itself for better Sodium compatibility
+            // instead of forcing it to use MobileGlues as backend
+            renderer = @ RENDERER_NAME_METALCRAFT;
         }
         setenv("POJAV_RENDERER_BACKEND", renderer.UTF8String, 1);
         set_gl_bridge_tbl();
