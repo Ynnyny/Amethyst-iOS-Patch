@@ -6,6 +6,12 @@ import java.nio.IntBuffer;
 import net.kdt.pojavlaunch.render.MetalCraftGLInterceptor;
 
 public class GL11 extends GL11C {
+    private static final String BACKEND_PROPERTY = "pojav.renderer.backend";
+    private static final String RENDERER_GL4ES = "libgl4es_114.dylib";
+    private static final String RENDERER_ANGLE = "libtinygl4angle.dylib";
+    private static final String RENDERER_MOBILEGLUES = "libmobileglues.dylib";
+    private static final String RENDERER_KRYPTON = "libng_gl4es.dylib";
+
     private static final int GL_TEXTURE_CUBE_MAP_SEAMLESS = 0x884F;
     private static final int GL_PROGRAM_POINT_SIZE = 0x8642;
     private static final int GL_BGRA = 0x80E1;
@@ -42,6 +48,43 @@ public class GL11 extends GL11C {
             type = GL_UNSIGNED_INT;
         }
         return new int[] {internalformat, format, type};
+    }
+
+    private static String getMetalCraftVersionString() {
+        String backend = System.getProperty(BACKEND_PROPERTY, "");
+        if (RENDERER_GL4ES.equals(backend)) {
+            return "2.1 MetalCraft / gl4es";
+        }
+        if (RENDERER_ANGLE.equals(backend)) {
+            return "3.2 MetalCraft / ANGLE";
+        }
+        if (RENDERER_MOBILEGLUES.equals(backend)) {
+            return "4.0 MetalCraft / MobileGlues";
+        }
+        if (RENDERER_KRYPTON.equals(backend)) {
+            return "4.1 MetalCraft / Krypton Wrapper";
+        }
+        return "4.1 MetalCraft";
+    }
+
+    private static String getMetalCraftRendererString() {
+        String backend = System.getProperty(BACKEND_PROPERTY, "");
+        if (backend == null || backend.length() == 0) {
+            return "MetalCraft Native Pipeline (Apple GPU)";
+        }
+        if (RENDERER_GL4ES.equals(backend)) {
+            return "MetalCraft Native Pipeline (gl4es backend)";
+        }
+        if (RENDERER_ANGLE.equals(backend)) {
+            return "MetalCraft Native Pipeline (ANGLE backend)";
+        }
+        if (RENDERER_MOBILEGLUES.equals(backend)) {
+            return "MetalCraft Native Pipeline (MobileGlues backend)";
+        }
+        if (RENDERER_KRYPTON.equals(backend)) {
+            return "MetalCraft Native Pipeline (Krypton Wrapper backend)";
+        }
+        return "MetalCraft Native Pipeline (" + backend + ")";
     }
 
     public static void glEnable(int cap) {
@@ -164,13 +207,13 @@ public class GL11 extends GL11C {
     public static String glGetString(int name) {
         if (MetalCraftGLInterceptor.isActive()) {
             if (name == 0x1F01) { // GL_RENDERER
-                return "MetalCraft Native Pipeline (Apple GPU)";
+                return getMetalCraftRendererString();
             }
             if (name == 0x1F00) { // GL_VENDOR
                 return "Amethyst-iOS";
             }
             if (name == 0x1F02) { // GL_VERSION
-                return "4.1 MetalCraft";
+                return getMetalCraftVersionString();
             }
         }
         return GL11C.glGetString(name);

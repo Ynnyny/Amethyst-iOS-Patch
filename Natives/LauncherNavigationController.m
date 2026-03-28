@@ -72,7 +72,6 @@ static void *ProgressObserverContext = &ProgressObserverContext;
     } @catch(id exception) {}
     self.observedTaskProgress = nil;
 }
-
 - (void)viewDidLoad
 {
     [super viewDidLoad];

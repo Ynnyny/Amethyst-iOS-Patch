@@ -22,6 +22,21 @@
 
 extern char **environ;
 
+static BOOL stringContainsMarker(NSString *value, NSArray<NSString *> *markers) {
+    if (value.length == 0) {
+        return NO;
+    }
+
+    NSString *lowercaseValue = value.lowercaseString;
+    for (NSString *marker in markers) {
+        if ([lowercaseValue containsString:marker]) {
+            return YES;
+        }
+    }
+
+    return NO;
+}
+
 static BOOL nameLooksLikeKnownSodiumRendererMod(NSString *name) {
     if (name.length == 0) {
         return NO;
@@ -32,14 +47,7 @@ static BOOL nameLooksLikeKnownSodiumRendererMod(NSString *name) {
         return NO;
     }
 
-    NSArray<NSString *> *markers = @[@"sodium", @"embeddium", @"rubidium", @"magnesium"];
-    for (NSString *marker in markers) {
-        if ([lowercaseName containsString:marker]) {
-            return YES;
-        }
-    }
-
-    return NO;
+    return stringContainsMarker(lowercaseName, @[@"sodium", @"embeddium", @"rubidium", @"magnesium"]);
 }
 
 static BOOL directoryContainsKnownSodiumRendererMod(NSString *modsDirectory) {
@@ -115,6 +123,40 @@ static void configureManagedMobileGluesEnv(BOOL sodiumCompat, BOOL useMetalCraft
     if (sodiumCompat || useMetalCraft) {
         setenv("AMETHYST_MG_FAKE_NATIVE_STRINGS", "1", 1);
     }
+}
+
+static void resetManagedKryptonEnv(void) {
+    unsetenv("LIBGL_ES");
+    unsetenv("LIBGL_GL");
+    unsetenv("LIBGL_RECYCLEFBO");
+    unsetenv("LIBGL_FBOMAKECURRENT");
+    unsetenv("LIBGL_FBOUNBIND");
+    unsetenv("LIBGL_FBOFORCETEX");
+    unsetenv("LIBGL_NODEPTHTEX");
+    unsetenv("LIBGL_NOTEXARRAY");
+}
+
+static void configureManagedKryptonEnv(void) {
+    resetManagedKryptonEnv();
+
+    setenv("LIBGL_ES", "3", 1);
+    setenv("LIBGL_FBOMAKECURRENT", "1", 1);
+    setenv("LIBGL_FBOUNBIND", "1", 1);
+    setenv("LIBGL_FBOFORCETEX", "1", 1);
+    setenv("LIBGL_RECYCLEFBO", "1", 1);
+    setenv("LIBGL_NODEPTHTEX", "0", 1);
+    setenv("LIBGL_NOTEXARRAY", "0", 1);
+    setenv("LIBGL_GL", "41", 1);
+}
+
+static void resetManagedRendererEnv(void) {
+    unsetenv("POJAV_RENDERER");
+    unsetenv("AMETHYST_RENDERER");
+    unsetenv("POJAV_RENDERER_BACKEND");
+    unsetenv("POJAV_METALCRAFT_ENABLED");
+    unsetenv("GALLIUM_DRIVER");
+    resetManagedMobileGluesEnv();
+    resetManagedKryptonEnv();
 }
 
 BOOL validateVirtualMemorySpace(size_t size) {
@@ -286,43 +328,33 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
             [PLProfiles resolveKeyForCurrentProfile:@"gameDir"]]
             .stringByStandardizingPath;
 
-        // Setup POJAV_RENDERER
+        resetManagedRendererEnv();
+
         NSString *requestedRenderer = [PLProfiles resolveKeyForCurrentProfile:@"renderer"];
         if (requestedRenderer.length == 0) {
             requestedRenderer = @"auto";
         }
 
         BOOL sodiumCompat = currentInstanceUsesKnownSodiumRendererMod(gameDir, launchTarget);
-        if (sodiumCompat &&
-            ([requestedRenderer isEqualToString:@"auto"] ||
-             [requestedRenderer isEqualToString:@ RENDERER_NAME_GL4ES] ||
-             [requestedRenderer isEqualToString:@ RENDERER_NAME_MTL_ANGLE] ||
-             [requestedRenderer isEqualToString:@ RENDERER_NAME_KRYPTON_WRAPPER])) {
-            NSLog(@"[JavaLauncher] Sodium-compatible launch detected, overriding renderer %@ -> %s",
-                  requestedRenderer, RENDERER_NAME_MOBILEGLUES);
-            requestedRenderer = @ RENDERER_NAME_MOBILEGLUES;
-        }
-
         BOOL useMetalCraft = [requestedRenderer isEqualToString:@ RENDERER_NAME_METALCRAFT];
-        configureManagedMobileGluesEnv(sodiumCompat, useMetalCraft);
 
         NSString *backendRenderer = requestedRenderer;
         if (useMetalCraft) {
-            const char *existingBackendRenderer = getenv("POJAV_RENDERER_BACKEND");
-            if (existingBackendRenderer != NULL &&
-                existingBackendRenderer[0] != '\0' &&
-                strcmp(existingBackendRenderer, "auto") != 0 &&
-                strcmp(existingBackendRenderer, requestedRenderer.UTF8String) != 0) {
-                backendRenderer = @(existingBackendRenderer);
-            } else {
-                backendRenderer = @ RENDERER_NAME_METALCRAFT_BACKEND;
-            }
+            backendRenderer = @ RENDERER_NAME_METALCRAFT_BACKEND;
             setenv("POJAV_METALCRAFT_ENABLED", "1", 1);
         } else {
             unsetenv("POJAV_METALCRAFT_ENABLED");
         }
-        NSLog(@"[JavaLauncher] RENDERER is set to %@ (backend: %@, sodiumCompat: %@)\n",
-              requestedRenderer, backendRenderer, sodiumCompat ? @"YES" : @"NO");
+
+        if ([backendRenderer isEqualToString:@ RENDERER_NAME_MOBILEGLUES]) {
+            configureManagedMobileGluesEnv(sodiumCompat, useMetalCraft);
+        } else if ([backendRenderer isEqualToString:@ RENDERER_NAME_KRYPTON_WRAPPER]) {
+            configureManagedKryptonEnv();
+        }
+
+        NSLog(@"[JavaLauncher] RENDERER is set to %@ (backend: %@, sodiumCompat: %@, metalCraft: %@)\n",
+              requestedRenderer, backendRenderer, sodiumCompat ? @"YES" : @"NO",
+              useMetalCraft ? @"YES" : @"NO");
         setenv("AMETHYST_RENDERER", requestedRenderer.UTF8String, 1);
         setenv("POJAV_RENDERER_BACKEND", backendRenderer.UTF8String, 1);
     } else {

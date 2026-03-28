@@ -19,7 +19,6 @@
 - (BOOL)shouldAbortDownloadFlow {
     return self.failed || self.launchBlocked || self.progress.cancelled;
 }
-
 - (instancetype)init {
     self = [super init];
     // TODO: implement background download
@@ -211,7 +210,6 @@
         success();
     }
 }
-
 - (NSArray *)downloadClientLibraries {
     NSMutableArray *tasks = [NSMutableArray new];
     for (NSDictionary *library in self.metadata[@"libraries"]) {

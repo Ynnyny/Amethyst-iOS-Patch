@@ -362,7 +362,6 @@ dep_kw: deps
 	cmake --build $(WORKINGDIR)/krypton_wrapper --config Release -j$(JOBS) --target ng_gl4es
 	cp $(WORKINGDIR)/krypton_wrapper/libng_gl4es.dylib $(WORKINGDIR)/libng_gl4es.dylib
 	echo '[Amethyst v$(VERSION)] dep_kw - end'
-
 assets:
 	echo '[Amethyst v$(VERSION)] assets - start'
 	if [ '$(IOS)' = '0' ] && [ '$(DETECTPLAT)' = 'Darwin' ]; then \
@@ -474,4 +473,4 @@ clean:
 
 		
 
-.PHONY: all clean check deps native java jre package dsym deploy help dep_kw
+.PHONY: all clean check deps native java jre package dsym deploy help dep_mg dep_kw

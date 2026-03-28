@@ -26,6 +26,34 @@ __thread basic_render_window_t* currentBundle = NULL;
 typedef jboolean (*MetalCraftIsSupportedProc)(void);
 typedef void (*MetalCraftShutdownProc)(void);
 
+static void selectBridgeForRenderer(NSString *renderer) {
+    unsetenv("GALLIUM_DRIVER");
+
+    if (renderer.length == 0 || [renderer isEqualToString:@"auto"] ||
+        [renderer isEqualToString:@ RENDERER_NAME_GL4ES] ||
+        [renderer isEqualToString:@ RENDERER_NAME_MOBILEGLUES] ||
+        [renderer isEqualToString:@ RENDERER_NAME_KRYPTON_WRAPPER] ||
+        [renderer isEqualToString:@ RENDERER_NAME_MTL_ANGLE]) {
+        if (renderer.length == 0 || [renderer isEqualToString:@"auto"]) {
+            renderer = @ RENDERER_NAME_GL4ES;
+        }
+        setenv("POJAV_RENDERER_BACKEND", renderer.UTF8String, 1);
+        set_gl_bridge_tbl();
+        return;
+    }
+
+    if ([renderer hasPrefix:@"libOSMesa"]) {
+        setenv("GALLIUM_DRIVER", "zink", 1);
+        setenv("POJAV_RENDERER_BACKEND", renderer.UTF8String, 1);
+        set_osm_bridge_tbl();
+        return;
+    }
+
+    NSLog(@"[Renderer] Unknown backend %@, falling back to %s", renderer, RENDERER_NAME_GL4ES);
+    setenv("POJAV_RENDERER_BACKEND", RENDERER_NAME_GL4ES, 1);
+    set_gl_bridge_tbl();
+}
+
 void JNI_LWJGL_changeRenderer(const char* value_c) {
     if (runtimeJavaVMPtr == NULL || value_c == NULL) {
         return;
@@ -37,11 +65,13 @@ void JNI_LWJGL_changeRenderer(const char* value_c) {
         return;
     }
 
-    jstring key = (*env)->NewStringUTF(env, "org.lwjgl.opengl.libname");
+    jstring libnameKey = (*env)->NewStringUTF(env, "org.lwjgl.opengl.libname");
+    jstring backendKey = (*env)->NewStringUTF(env, "pojav.renderer.backend");
     jstring value = (*env)->NewStringUTF(env, value_c);
     jclass clazz = (*env)->FindClass(env, "java/lang/System");
-    if (key == NULL || value == NULL || clazz == NULL) {
-        if (key != NULL) (*env)->DeleteLocalRef(env, key);
+    if (libnameKey == NULL || backendKey == NULL || value == NULL || clazz == NULL) {
+        if (libnameKey != NULL) (*env)->DeleteLocalRef(env, libnameKey);
+        if (backendKey != NULL) (*env)->DeleteLocalRef(env, backendKey);
         if (value != NULL) (*env)->DeleteLocalRef(env, value);
         if (clazz != NULL) (*env)->DeleteLocalRef(env, clazz);
         return;
@@ -49,14 +79,19 @@ void JNI_LWJGL_changeRenderer(const char* value_c) {
 
     jmethodID method = (*env)->GetStaticMethodID(env, clazz, "setProperty", "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;");
     if (method != NULL) {
-        jobject oldValue = (*env)->CallStaticObjectMethod(env, clazz, method, key, value);
+        jobject oldValue = (*env)->CallStaticObjectMethod(env, clazz, method, libnameKey, value);
+        if (oldValue != NULL) {
+            (*env)->DeleteLocalRef(env, oldValue);
+        }
+        oldValue = (*env)->CallStaticObjectMethod(env, clazz, method, backendKey, value);
         if (oldValue != NULL) {
             (*env)->DeleteLocalRef(env, oldValue);
         }
     }
     (*env)->DeleteLocalRef(env, clazz);
     (*env)->DeleteLocalRef(env, value);
-    (*env)->DeleteLocalRef(env, key);
+    (*env)->DeleteLocalRef(env, backendKey);
+    (*env)->DeleteLocalRef(env, libnameKey);
 }
 
 void pojavTerminate() {
@@ -94,41 +129,23 @@ int pojavInitOpenGL() {
         renderer = @"auto";
     }
     BOOL useMetalCraft = [requestedRenderer isEqualToString:@ RENDERER_NAME_METALCRAFT];
-    BOOL isAuto = [renderer isEqualToString:@"auto"];
     if (useMetalCraft) {
         if (renderer.length == 0 ||
             [renderer isEqualToString:@"auto"] ||
             [renderer isEqualToString:requestedRenderer]) {
             renderer = @ RENDERER_NAME_METALCRAFT_BACKEND;
         }
-        setenv("POJAV_RENDERER_BACKEND", renderer.UTF8String, 1);
-        set_gl_bridge_tbl();
-    } else if (isAuto || [renderer isEqualToString:@ RENDERER_NAME_GL4ES]) {
-        // At this point, if renderer is still auto (unspecified major version), pick gl4es
-        renderer = @ RENDERER_NAME_GL4ES;
-        setenv("POJAV_RENDERER_BACKEND", renderer.UTF8String, 1);
-        set_gl_bridge_tbl();
-    } else if ([renderer isEqualToString:@ RENDERER_NAME_MOBILEGLUES]) {
-        renderer = @ RENDERER_NAME_MOBILEGLUES;
-        setenv("POJAV_RENDERER_BACKEND", renderer.UTF8String, 1);
-        set_gl_bridge_tbl();
-    } else if ([renderer isEqualToString:@ RENDERER_NAME_KRYPTON_WRAPPER]) {
-        renderer = @ RENDERER_NAME_KRYPTON_WRAPPER;
-        setenv("POJAV_RENDERER_BACKEND", renderer.UTF8String, 1);
-        set_gl_bridge_tbl();
-    } else if ([renderer isEqualToString:@ RENDERER_NAME_MTL_ANGLE]) {
-        setenv("POJAV_RENDERER_BACKEND", renderer.UTF8String, 1);
-        set_gl_bridge_tbl();
-    } else if ([renderer hasPrefix:@"libOSMesa"]) {
-        setenv("GALLIUM_DRIVER","zink",1);
-        setenv("POJAV_RENDERER_BACKEND", renderer.UTF8String, 1);
-        set_osm_bridge_tbl();
     }
+    selectBridgeForRenderer(renderer);
+    renderer = @(getenv("POJAV_RENDERER_BACKEND"));
     if (!useMetalCraft) {
         JNI_LWJGL_changeRenderer(renderer.UTF8String);
     }
     // Preload renderer library
-    dlopen([NSString stringWithFormat:@"@rpath/%@", renderer].UTF8String, RTLD_GLOBAL);
+    void *rendererHandle = dlopen([NSString stringWithFormat:@"@rpath/%@", renderer].UTF8String, RTLD_GLOBAL);
+    if (rendererHandle == NULL) {
+        NSLog(@"[Renderer] Failed to preload %@: %s", renderer, dlerror());
+    }
     if (useMetalCraft) {
         void *metalCraftHandle = dlopen("@rpath/libMetalCraft.dylib", RTLD_GLOBAL);
         if (metalCraftHandle != NULL) {
@@ -147,6 +164,9 @@ int pojavInitOpenGL() {
         }
     }
 
+    if (br_init == NULL) {
+        return JNI_TRUE;
+    }
     return !br_init();
     //return 0;
 }
@@ -166,13 +186,15 @@ void pojavSetWindowHint(int hint, int value) {
             case 2:
                 setenv("AMETHYST_RENDERER", RENDERER_NAME_GL4ES, 1);
                 setenv("POJAV_RENDERER_BACKEND", RENDERER_NAME_GL4ES, 1);
+                unsetenv("GALLIUM_DRIVER");
                 JNI_LWJGL_changeRenderer(RENDERER_NAME_GL4ES);
                 break;
-            // case 4: use Zink?
+            // Avoid implicit MobileGlues switching; prefer Krypton for newer contexts.
             default:
-                setenv("AMETHYST_RENDERER", RENDERER_NAME_MOBILEGLUES, 1);
-                setenv("POJAV_RENDERER_BACKEND", RENDERER_NAME_MOBILEGLUES, 1);
-                JNI_LWJGL_changeRenderer(RENDERER_NAME_MOBILEGLUES);
+                setenv("AMETHYST_RENDERER", RENDERER_NAME_KRYPTON_WRAPPER, 1);
+                setenv("POJAV_RENDERER_BACKEND", RENDERER_NAME_KRYPTON_WRAPPER, 1);
+                unsetenv("GALLIUM_DRIVER");
+                JNI_LWJGL_changeRenderer(RENDERER_NAME_KRYPTON_WRAPPER);
                 break;
         }
     }

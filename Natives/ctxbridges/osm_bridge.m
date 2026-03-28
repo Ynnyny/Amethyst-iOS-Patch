@@ -12,7 +12,14 @@
 static osmesa_library handle;
 
 void dlsym_OSMesa() {
-    void* dl_handle = dlopen([NSString stringWithFormat:@"@rpath/%s", getenv("AMETHYST_RENDERER")].UTF8String, RTLD_GLOBAL);
+    const char *rendererName = getenv("POJAV_RENDERER_BACKEND");
+    if (rendererName == NULL || rendererName[0] == '\0') {
+        rendererName = getenv("AMETHYST_RENDERER");
+    }
+    if (rendererName == NULL || rendererName[0] == '\0') {
+        rendererName = RENDERER_NAME_VK_ZINK;
+    }
+    void* dl_handle = dlopen([NSString stringWithFormat:@"@rpath/%s", rendererName].UTF8String, RTLD_GLOBAL);
     assert(dl_handle);
     handle.OSMesaMakeCurrent = dlsym(dl_handle,"OSMesaMakeCurrent");
     handle.OSMesaGetCurrentContext = dlsym(dl_handle,"OSMesaGetCurrentContext");
