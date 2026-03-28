@@ -680,6 +680,12 @@ static char* normalize_shader_source_for_es(const char* text, int esversion) {
     return trimmed;
 }
 
+static bool should_normalize_shader_source_for_es(const char* text) {
+    if (!text) return false;
+    if (globals4es.es < 3 || globals4es.esversion < 300) return false;
+    return getGLSLVersion(text) >= 300;
+}
+
 void set_es_version();
 void APIENTRY_GL4ES gl4es_glShaderSource(GLuint shader, GLsizei count, const GLchar* const* string,
                                          const GLint* length) {
@@ -806,7 +812,7 @@ void APIENTRY_GL4ES gl4es_glShaderSource(GLuint shader, GLsizei count, const GLc
 
         GLchar* finalSource = (glshader->converted) ? glshader->converted : glshader->source;
         char* tempSource = NULL;
-        if (globals4es.es >= 3 && globals4es.esversion >= 300 && glshader->is_converted_essl_320) {
+        if (should_normalize_shader_source_for_es(finalSource)) {
             char* esSource = normalize_shader_source_for_es(finalSource, globals4es.esversion);
             if (esSource) {
                 tempSource = esSource;
@@ -898,7 +904,7 @@ void redoShader(GLuint shader, shaderconv_need_t* need) {
     // send source to GLES2 hardware if any
     const GLchar* shaderSource = glshader->converted ? glshader->converted : glshader->source;
     char* normalizedSource = NULL;
-    if (globals4es.es >= 3 && globals4es.esversion >= 300 && glshader->is_converted_essl_320) {
+    if (should_normalize_shader_source_for_es(shaderSource)) {
         normalizedSource = normalize_shader_source_for_es(shaderSource, globals4es.esversion);
         if (normalizedSource) shaderSource = normalizedSource;
     }

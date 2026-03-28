@@ -264,6 +264,28 @@ public final class MetalCraftGLInterceptor {
         }
     }
 
+    public static boolean hasShaderSource(long shaderId) {
+        if (!ACTIVE || shaderId == 0L) {
+            return false;
+        }
+
+        synchronized (LOCK) {
+            ShaderState shader = SHADERS.get(Long.valueOf(shaderId));
+            return shader != null && shader.source != null && shader.source.length() > 0;
+        }
+    }
+
+    public static int getShaderType(long shaderId) {
+        if (!ACTIVE || shaderId == 0L) {
+            return 0;
+        }
+
+        synchronized (LOCK) {
+            ShaderState shader = SHADERS.get(Long.valueOf(shaderId));
+            return shader == null ? 0 : shader.glShaderType;
+        }
+    }
+
     public static void onShaderAttached(long programId, long shaderId) {
         if (!ACTIVE || programId == 0L || shaderId == 0L) {
             return;
@@ -308,6 +330,28 @@ public final class MetalCraftGLInterceptor {
             if (currentProgramId == programId) {
                 syncProgramBindingLocked();
             }
+        }
+    }
+
+    public static boolean canLinkProgram(long programId) {
+        if (!ACTIVE || programId == 0L) {
+            return false;
+        }
+
+        synchronized (LOCK) {
+            ProgramState program = PROGRAMS.get(Long.valueOf(programId));
+            return program != null && hasLinkedStagesLocked(program);
+        }
+    }
+
+    public static boolean isProgramLinked(long programId) {
+        if (!ACTIVE || programId == 0L) {
+            return false;
+        }
+
+        synchronized (LOCK) {
+            ProgramState program = PROGRAMS.get(Long.valueOf(programId));
+            return program != null && program.linked;
         }
     }
 

@@ -52,7 +52,10 @@ gl_render_window_t* gl_init_context(gl_render_window_t *share) {
     gl_render_window_t* bundle = calloc(1, sizeof(gl_render_window_t));
 
     NSDictionary<NSString *, NSString *> *environment = NSProcessInfo.processInfo.environment;
-    NSString *renderer = environment[@"POJAV_RENDERER_BACKEND"];
+    NSString *renderer = environment[@"POJAV_RENDERER_BOOTSTRAP"];
+    if (renderer.length == 0) {
+        renderer = environment[@"POJAV_RENDERER_BACKEND"];
+    }
     if (renderer.length == 0) {
         renderer = environment[@"AMETHYST_RENDERER"];
     }

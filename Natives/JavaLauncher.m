@@ -153,6 +153,7 @@ static void resetManagedRendererEnv(void) {
     unsetenv("POJAV_RENDERER");
     unsetenv("AMETHYST_RENDERER");
     unsetenv("POJAV_RENDERER_BACKEND");
+    unsetenv("POJAV_RENDERER_BOOTSTRAP");
     unsetenv("POJAV_METALCRAFT_ENABLED");
     unsetenv("GALLIUM_DRIVER");
     resetManagedMobileGluesEnv();
@@ -339,24 +340,28 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
         BOOL useMetalCraft = [requestedRenderer isEqualToString:@ RENDERER_NAME_METALCRAFT];
 
         NSString *backendRenderer = requestedRenderer;
+        NSString *bootstrapRenderer = requestedRenderer;
         if (useMetalCraft) {
             backendRenderer = @ RENDERER_NAME_METALCRAFT_BACKEND;
+            bootstrapRenderer = @ RENDERER_NAME_METALCRAFT_BOOTSTRAP;
             setenv("POJAV_METALCRAFT_ENABLED", "1", 1);
         } else {
             unsetenv("POJAV_METALCRAFT_ENABLED");
         }
 
-        if ([backendRenderer isEqualToString:@ RENDERER_NAME_MOBILEGLUES]) {
+        if ([bootstrapRenderer isEqualToString:@ RENDERER_NAME_MOBILEGLUES]) {
             configureManagedMobileGluesEnv(sodiumCompat, useMetalCraft);
-        } else if ([backendRenderer isEqualToString:@ RENDERER_NAME_KRYPTON_WRAPPER]) {
+        } else if ([bootstrapRenderer isEqualToString:@ RENDERER_NAME_KRYPTON_WRAPPER]) {
             configureManagedKryptonEnv();
         }
 
-        NSLog(@"[JavaLauncher] RENDERER is set to %@ (backend: %@, sodiumCompat: %@, metalCraft: %@)\n",
-              requestedRenderer, backendRenderer, sodiumCompat ? @"YES" : @"NO",
+        NSLog(@"[JavaLauncher] RENDERER is set to %@ (backend: %@, bootstrap: %@, sodiumCompat: %@, metalCraft: %@)\n",
+              requestedRenderer, backendRenderer, bootstrapRenderer,
+              sodiumCompat ? @"YES" : @"NO",
               useMetalCraft ? @"YES" : @"NO");
         setenv("AMETHYST_RENDERER", requestedRenderer.UTF8String, 1);
         setenv("POJAV_RENDERER_BACKEND", backendRenderer.UTF8String, 1);
+        setenv("POJAV_RENDERER_BOOTSTRAP", bootstrapRenderer.UTF8String, 1);
     } else {
         defaultJRETag = @"execute_jar";
         gameDir = @(getenv("POJAV_GAME_DIR"));
@@ -432,7 +437,10 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     BOOL isJava8 = [fm fileExistsAtPath:libjlipath8];
 
     // Preset OpenGL libname
-    const char *glLibName = getenv("POJAV_RENDERER_BACKEND");
+    const char *glLibName = getenv("POJAV_RENDERER_BOOTSTRAP");
+    if (!glLibName || !*glLibName) {
+        glLibName = getenv("POJAV_RENDERER_BACKEND");
+    }
     if (!glLibName || !*glLibName) {
         glLibName = getenv("AMETHYST_RENDERER");
     }
@@ -453,6 +461,12 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     if (backendRenderer) {
         margv[++margc] =
             [NSString stringWithFormat:@"-Dpojav.renderer.backend=%s", backendRenderer]
+                .UTF8String;
+    }
+    const char *bootstrapRenderer = getenv("POJAV_RENDERER_BOOTSTRAP");
+    if (bootstrapRenderer) {
+        margv[++margc] =
+            [NSString stringWithFormat:@"-Dpojav.renderer.bootstrap=%s", bootstrapRenderer]
                 .UTF8String;
     }
     margv[++margc] = [NSString stringWithFormat:@"-Dpojav.renderer.metalcraft=%s",

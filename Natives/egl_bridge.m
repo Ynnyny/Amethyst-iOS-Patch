@@ -37,26 +37,38 @@ static void selectBridgeForRenderer(NSString *renderer) {
         if (renderer.length == 0 || [renderer isEqualToString:@"auto"]) {
             renderer = @ RENDERER_NAME_GL4ES;
         }
-        setenv("POJAV_RENDERER_BACKEND", renderer.UTF8String, 1);
+        setenv("POJAV_RENDERER_BOOTSTRAP", renderer.UTF8String, 1);
         set_gl_bridge_tbl();
         return;
     }
 
     if ([renderer hasPrefix:@"libOSMesa"]) {
         setenv("GALLIUM_DRIVER", "zink", 1);
-        setenv("POJAV_RENDERER_BACKEND", renderer.UTF8String, 1);
+        setenv("POJAV_RENDERER_BOOTSTRAP", renderer.UTF8String, 1);
         set_osm_bridge_tbl();
         return;
     }
 
     NSLog(@"[Renderer] Unknown backend %@, falling back to %s", renderer, RENDERER_NAME_GL4ES);
-    setenv("POJAV_RENDERER_BACKEND", RENDERER_NAME_GL4ES, 1);
+    setenv("POJAV_RENDERER_BOOTSTRAP", RENDERER_NAME_GL4ES, 1);
     set_gl_bridge_tbl();
 }
 
-void JNI_LWJGL_changeRenderer(const char* value_c) {
-    if (runtimeJavaVMPtr == NULL || value_c == NULL) {
+static void JNI_LWJGL_syncRendererProperties(const char* backend_c, const char* bootstrap_c) {
+    if (runtimeJavaVMPtr == NULL) {
         return;
+    }
+
+    if ((backend_c == NULL || backend_c[0] == '\0') &&
+        (bootstrap_c == NULL || bootstrap_c[0] == '\0')) {
+        return;
+    }
+
+    if (backend_c == NULL || backend_c[0] == '\0') {
+        backend_c = bootstrap_c;
+    }
+    if (bootstrap_c == NULL || bootstrap_c[0] == '\0') {
+        bootstrap_c = backend_c;
     }
 
     JNIEnv *env;
@@ -67,29 +79,40 @@ void JNI_LWJGL_changeRenderer(const char* value_c) {
 
     jstring libnameKey = (*env)->NewStringUTF(env, "org.lwjgl.opengl.libname");
     jstring backendKey = (*env)->NewStringUTF(env, "pojav.renderer.backend");
-    jstring value = (*env)->NewStringUTF(env, value_c);
+    jstring bootstrapKey = (*env)->NewStringUTF(env, "pojav.renderer.bootstrap");
+    jstring backendValue = (*env)->NewStringUTF(env, backend_c);
+    jstring bootstrapValue = (*env)->NewStringUTF(env, bootstrap_c);
     jclass clazz = (*env)->FindClass(env, "java/lang/System");
-    if (libnameKey == NULL || backendKey == NULL || value == NULL || clazz == NULL) {
+    if (libnameKey == NULL || backendKey == NULL || bootstrapKey == NULL ||
+        backendValue == NULL || bootstrapValue == NULL || clazz == NULL) {
         if (libnameKey != NULL) (*env)->DeleteLocalRef(env, libnameKey);
         if (backendKey != NULL) (*env)->DeleteLocalRef(env, backendKey);
-        if (value != NULL) (*env)->DeleteLocalRef(env, value);
+        if (bootstrapKey != NULL) (*env)->DeleteLocalRef(env, bootstrapKey);
+        if (backendValue != NULL) (*env)->DeleteLocalRef(env, backendValue);
+        if (bootstrapValue != NULL) (*env)->DeleteLocalRef(env, bootstrapValue);
         if (clazz != NULL) (*env)->DeleteLocalRef(env, clazz);
         return;
     }
 
     jmethodID method = (*env)->GetStaticMethodID(env, clazz, "setProperty", "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;");
     if (method != NULL) {
-        jobject oldValue = (*env)->CallStaticObjectMethod(env, clazz, method, libnameKey, value);
+        jobject oldValue = (*env)->CallStaticObjectMethod(env, clazz, method, libnameKey, bootstrapValue);
         if (oldValue != NULL) {
             (*env)->DeleteLocalRef(env, oldValue);
         }
-        oldValue = (*env)->CallStaticObjectMethod(env, clazz, method, backendKey, value);
+        oldValue = (*env)->CallStaticObjectMethod(env, clazz, method, backendKey, backendValue);
+        if (oldValue != NULL) {
+            (*env)->DeleteLocalRef(env, oldValue);
+        }
+        oldValue = (*env)->CallStaticObjectMethod(env, clazz, method, bootstrapKey, bootstrapValue);
         if (oldValue != NULL) {
             (*env)->DeleteLocalRef(env, oldValue);
         }
     }
     (*env)->DeleteLocalRef(env, clazz);
-    (*env)->DeleteLocalRef(env, value);
+    (*env)->DeleteLocalRef(env, bootstrapValue);
+    (*env)->DeleteLocalRef(env, backendValue);
+    (*env)->DeleteLocalRef(env, bootstrapKey);
     (*env)->DeleteLocalRef(env, backendKey);
     (*env)->DeleteLocalRef(env, libnameKey);
 }
@@ -121,30 +144,39 @@ int pojavInit(BOOL useStackQueue) {
 int pojavInitOpenGL() {
     NSDictionary<NSString *, NSString *> *environment = NSProcessInfo.processInfo.environment;
     NSString *requestedRenderer = environment[@"AMETHYST_RENDERER"];
-    NSString *renderer = environment[@"POJAV_RENDERER_BACKEND"];
-    if (renderer.length == 0) {
-        renderer = requestedRenderer;
+    NSString *backendRenderer = environment[@"POJAV_RENDERER_BACKEND"];
+    if (backendRenderer.length == 0) {
+        backendRenderer = requestedRenderer;
     }
-    if (renderer.length == 0) {
-        renderer = @"auto";
+    NSString *bootstrapRenderer = environment[@"POJAV_RENDERER_BOOTSTRAP"];
+    if (bootstrapRenderer.length == 0) {
+        bootstrapRenderer = backendRenderer;
+    }
+    if (bootstrapRenderer.length == 0) {
+        bootstrapRenderer = @"auto";
     }
     BOOL useMetalCraft = [requestedRenderer isEqualToString:@ RENDERER_NAME_METALCRAFT];
     if (useMetalCraft) {
-        if (renderer.length == 0 ||
-            [renderer isEqualToString:@"auto"] ||
-            [renderer isEqualToString:requestedRenderer]) {
-            renderer = @ RENDERER_NAME_METALCRAFT_BACKEND;
+        if (backendRenderer.length == 0) {
+            backendRenderer = requestedRenderer;
+        }
+        if (bootstrapRenderer.length == 0 ||
+            [bootstrapRenderer isEqualToString:@"auto"] ||
+            [bootstrapRenderer isEqualToString:requestedRenderer] ||
+            [bootstrapRenderer isEqualToString:backendRenderer]) {
+            bootstrapRenderer = @ RENDERER_NAME_METALCRAFT_BOOTSTRAP;
         }
     }
-    selectBridgeForRenderer(renderer);
-    renderer = @(getenv("POJAV_RENDERER_BACKEND"));
-    if (!useMetalCraft) {
-        JNI_LWJGL_changeRenderer(renderer.UTF8String);
+    selectBridgeForRenderer(bootstrapRenderer);
+    bootstrapRenderer = @(getenv("POJAV_RENDERER_BOOTSTRAP"));
+    if (backendRenderer.length == 0 || [backendRenderer isEqualToString:@"auto"]) {
+        backendRenderer = bootstrapRenderer;
     }
+    JNI_LWJGL_syncRendererProperties(backendRenderer.UTF8String, bootstrapRenderer.UTF8String);
     // Preload renderer library
-    void *rendererHandle = dlopen([NSString stringWithFormat:@"@rpath/%@", renderer].UTF8String, RTLD_GLOBAL);
+    void *rendererHandle = dlopen([NSString stringWithFormat:@"@rpath/%@", bootstrapRenderer].UTF8String, RTLD_GLOBAL);
     if (rendererHandle == NULL) {
-        NSLog(@"[Renderer] Failed to preload %@: %s", renderer, dlerror());
+        NSLog(@"[Renderer] Failed to preload %@: %s", bootstrapRenderer, dlerror());
     }
     if (useMetalCraft) {
         void *metalCraftHandle = dlopen("@rpath/libMetalCraft.dylib", RTLD_GLOBAL);
@@ -186,15 +218,17 @@ void pojavSetWindowHint(int hint, int value) {
             case 2:
                 setenv("AMETHYST_RENDERER", RENDERER_NAME_GL4ES, 1);
                 setenv("POJAV_RENDERER_BACKEND", RENDERER_NAME_GL4ES, 1);
+                setenv("POJAV_RENDERER_BOOTSTRAP", RENDERER_NAME_GL4ES, 1);
                 unsetenv("GALLIUM_DRIVER");
-                JNI_LWJGL_changeRenderer(RENDERER_NAME_GL4ES);
+                JNI_LWJGL_syncRendererProperties(RENDERER_NAME_GL4ES, RENDERER_NAME_GL4ES);
                 break;
             // Avoid implicit MobileGlues switching; prefer Krypton for newer contexts.
             default:
                 setenv("AMETHYST_RENDERER", RENDERER_NAME_KRYPTON_WRAPPER, 1);
                 setenv("POJAV_RENDERER_BACKEND", RENDERER_NAME_KRYPTON_WRAPPER, 1);
+                setenv("POJAV_RENDERER_BOOTSTRAP", RENDERER_NAME_KRYPTON_WRAPPER, 1);
                 unsetenv("GALLIUM_DRIVER");
-                JNI_LWJGL_changeRenderer(RENDERER_NAME_KRYPTON_WRAPPER);
+                JNI_LWJGL_syncRendererProperties(RENDERER_NAME_KRYPTON_WRAPPER, RENDERER_NAME_KRYPTON_WRAPPER);
                 break;
         }
     }

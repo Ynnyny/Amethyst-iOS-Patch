@@ -11,6 +11,9 @@ import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
 
 public class GL20 extends GL20C {
+    private static final String METALCRAFT_LINK_FAILURE =
+            "MetalCraft program link failed: missing translated vertex or fragment shader";
+
     private GL20() {}
 
     public static int glCreateProgram() {
@@ -34,13 +37,17 @@ public class GL20 extends GL20C {
     }
 
     public static void glAttachShader(int program, int shader) {
-        GL20C.glAttachShader(program, shader);
+        if (!MetalCraftGLInterceptor.isActive()) {
+            GL20C.glAttachShader(program, shader);
+        }
         MetalCraftGLInterceptor.onShaderAttached(MetalCraftOpenGLHooks.asUnsignedId(program),
                 MetalCraftOpenGLHooks.asUnsignedId(shader));
     }
 
     public static void glDetachShader(int program, int shader) {
-        GL20C.glDetachShader(program, shader);
+        if (!MetalCraftGLInterceptor.isActive()) {
+            GL20C.glDetachShader(program, shader);
+        }
         MetalCraftGLInterceptor.onShaderDetached(MetalCraftOpenGLHooks.asUnsignedId(program),
                 MetalCraftOpenGLHooks.asUnsignedId(shader));
     }
@@ -83,7 +90,24 @@ public class GL20 extends GL20C {
         GL20C.glShaderSource(shader, string);
     }
 
+    public static void glCompileShader(int shader) {
+        if (MetalCraftGLInterceptor.isActive()) {
+            return;
+        }
+        GL20C.glCompileShader(shader);
+    }
+
     public static void glLinkProgram(int program) {
+        if (MetalCraftGLInterceptor.isActive()) {
+            long programId = MetalCraftOpenGLHooks.asUnsignedId(program);
+            if (MetalCraftGLInterceptor.canLinkProgram(programId)) {
+                MetalCraftGLInterceptor.onProgramLinked(programId);
+            } else {
+                MetalCraftGLInterceptor.onProgramLinkFailed(programId);
+            }
+            return;
+        }
+
         GL20C.glLinkProgram(program);
         if (GL20C.glGetProgrami(program, GL20C.GL_LINK_STATUS) == GL11C.GL_TRUE) {
             MetalCraftGLInterceptor.onProgramLinked(MetalCraftOpenGLHooks.asUnsignedId(program));
@@ -93,8 +117,90 @@ public class GL20 extends GL20C {
         }
     }
 
+    public static int glGetShaderi(int shader, int pname) {
+        if (MetalCraftGLInterceptor.isActive()) {
+            if (pname == GL20C.GL_COMPILE_STATUS) {
+                return MetalCraftGLInterceptor.hasShaderSource(
+                        MetalCraftOpenGLHooks.asUnsignedId(shader)) ? GL11C.GL_TRUE
+                                : GL11C.GL_FALSE;
+            }
+            if (pname == GL20C.GL_INFO_LOG_LENGTH) {
+                return 0;
+            }
+            if (pname == GL20C.GL_SHADER_TYPE) {
+                int shaderType = MetalCraftGLInterceptor.getShaderType(
+                        MetalCraftOpenGLHooks.asUnsignedId(shader));
+                if (shaderType != 0) {
+                    return shaderType;
+                }
+            }
+        }
+        return GL20C.glGetShaderi(shader, pname);
+    }
+
+    public static String glGetShaderInfoLog(int shader) {
+        if (MetalCraftGLInterceptor.isActive()) {
+            return "";
+        }
+        return GL20C.glGetShaderInfoLog(shader);
+    }
+
+    public static String glGetShaderInfoLog(int shader, int maxLength) {
+        if (MetalCraftGLInterceptor.isActive()) {
+            return "";
+        }
+        return GL20C.glGetShaderInfoLog(shader, maxLength);
+    }
+
+    public static int glGetProgrami(int program, int pname) {
+        if (MetalCraftGLInterceptor.isActive()) {
+            if (pname == GL20C.GL_LINK_STATUS || pname == GL20C.GL_VALIDATE_STATUS) {
+                return MetalCraftGLInterceptor.isProgramLinked(
+                        MetalCraftOpenGLHooks.asUnsignedId(program)) ? GL11C.GL_TRUE
+                                : GL11C.GL_FALSE;
+            }
+            if (pname == GL20C.GL_INFO_LOG_LENGTH) {
+                return MetalCraftGLInterceptor.isProgramLinked(
+                        MetalCraftOpenGLHooks.asUnsignedId(program)) ? 0
+                                : METALCRAFT_LINK_FAILURE.length();
+            }
+        }
+        return GL20C.glGetProgrami(program, pname);
+    }
+
+    public static String glGetProgramInfoLog(int program) {
+        if (MetalCraftGLInterceptor.isActive()) {
+            return MetalCraftGLInterceptor.isProgramLinked(
+                    MetalCraftOpenGLHooks.asUnsignedId(program)) ? ""
+                            : METALCRAFT_LINK_FAILURE;
+        }
+        return GL20C.glGetProgramInfoLog(program);
+    }
+
+    public static String glGetProgramInfoLog(int program, int maxLength) {
+        if (MetalCraftGLInterceptor.isActive()) {
+            String log = MetalCraftGLInterceptor.isProgramLinked(
+                    MetalCraftOpenGLHooks.asUnsignedId(program)) ? ""
+                            : METALCRAFT_LINK_FAILURE;
+            if (maxLength <= 0 || log.length() <= maxLength) {
+                return log;
+            }
+            return log.substring(0, maxLength);
+        }
+        return GL20C.glGetProgramInfoLog(program, maxLength);
+    }
+
+    public static void glValidateProgram(int program) {
+        if (MetalCraftGLInterceptor.isActive()) {
+            return;
+        }
+        GL20C.glValidateProgram(program);
+    }
+
     public static void glUseProgram(int program) {
-        GL20C.glUseProgram(program);
+        if (!MetalCraftGLInterceptor.isActive()) {
+            GL20C.glUseProgram(program);
+        }
         MetalCraftGLInterceptor.useProgram(MetalCraftOpenGLHooks.asUnsignedId(program));
     }
 

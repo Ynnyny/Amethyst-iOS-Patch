@@ -100,7 +100,9 @@ public class PojavLauncher {
         MetalCraftBridge.bootstrapRequestedRenderer();
         System.out.println("[MetalCraft] Bootstrap: available=" + MetalCraftBridge.isAvailable()
                 + " metalcraft.active=" + System.getProperty("pojav.renderer.metalcraft.active")
-                + " metalcraft=" + System.getProperty("pojav.renderer.metalcraft"));
+                + " metalcraft=" + System.getProperty("pojav.renderer.metalcraft")
+                + " backend=" + System.getProperty("pojav.renderer.backend")
+                + " bootstrap=" + System.getProperty("pojav.renderer.bootstrap"));
         boolean interceptorActive = MetalCraftGLInterceptor.bootstrap();
         System.out.println("[MetalCraft] Interceptor bootstrap result: " + interceptorActive
                 + " (isActive=" + MetalCraftGLInterceptor.isActive() + ")");
