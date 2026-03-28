@@ -723,6 +723,20 @@ void APIENTRY_GL4ES gl4es_glShaderSource(GLuint shader, GLsizei count, const GLc
         for (int i = 0; i < count; i++)
             strcat(glshader->source, string[i]);
     }
+
+    // Sanitize source by stripping all '\r' characters
+    if (glshader->source) {
+        char* read_ptr = glshader->source;
+        char* write_ptr = glshader->source;
+        while (*read_ptr) {
+            if (*read_ptr != '\r') {
+                *write_ptr++ = *read_ptr;
+            }
+            read_ptr++;
+        }
+        *write_ptr = '\0';
+    }
+
     LOAD_GLES2(glShaderSource);
     if (gles_glShaderSource) {
         // adapt shader if needed (i.e. not an es2 context and shader is not #version 100)
