@@ -1,0 +1,10 @@
+<?xml version="1.0" ?>
+<launchConfiguration type="org.eclipse.jdt.launching.localJavaApplication">
+    <stringAttribute key="org.eclipse.jdt.launching.PROJECT_ATTR" value="neoforge"></stringAttribute>
+    <stringAttribute key="org.eclipse.jdt.launching.MAIN_TYPE" value="net.neoforged.devlaunch.Main"></stringAttribute>
+    <stringAttribute key="org.eclipse.jdt.launching.PROGRAM_ARGUMENTS" value=" @/home/vu-duy-anh/Documents/Amethyst-iOS-Patch-main/sodium-dev/neoforge/build/moddev/clientRunProgramArgs.txt"></stringAttribute>
+    <stringAttribute key="org.eclipse.jdt.launching.VM_ARGUMENTS" value=" @/home/vu-duy-anh/Documents/Amethyst-iOS-Patch-main/sodium-dev/neoforge/build/moddev/clientRunVmArgs.txt -Dfml.modFolders=sodium%%/home/vu-duy-anh/Documents/Amethyst-iOS-Patch-main/sodium-dev/neoforge/bin/mod:sodium%%/home/vu-duy-anh/Documents/Amethyst-iOS-Patch-main/sodium-dev/common/bin/main:sodium%%/home/vu-duy-anh/Documents/Amethyst-iOS-Patch-main/sodium-dev/common/bin/api:sodium-service%%/home/vu-duy-anh/Documents/Amethyst-iOS-Patch-main/sodium-dev/neoforge/bin/main:sodium-service%%/home/vu-duy-anh/Documents/Amethyst-iOS-Patch-main/sodium-dev/common/bin/boot"></stringAttribute>
+    <stringAttribute key="org.eclipse.jdt.launching.WORKING_DIRECTORY" value="/home/vu-duy-anh/Documents/Amethyst-iOS-Patch-main/sodium-dev/neoforge/run"></stringAttribute>
+    <booleanAttribute key="org.eclipse.jdt.launching.STOP_IN_MAIN" value="false"></booleanAttribute>
+    <booleanAttribute key="org.eclipse.jdt.launching.ATTR_ATTR_USE_ARGFILE" value="false"></booleanAttribute>
+</launchConfiguration>

@@ -9,6 +9,7 @@
 
 static EGLDisplay g_EglDisplay;
 static egl_library handle;
+static gl_render_window_t* g_MainBundle = NULL;
 
 void dlsym_EGL() {
     void* dl_handle = dlopen("@rpath/libtinygl4angle.dylib", RTLD_GLOBAL);
@@ -116,6 +117,9 @@ gl_render_window_t* gl_init_context(gl_render_window_t *share) {
         return NULL;
     }
     //NSDebugLog(@"EGLBridge: Created CTX pointer = %p (source = %p)", bundle->context, share?share->context:0);
+    if (!g_MainBundle) {
+        g_MainBundle = bundle;
+    }
 
     return bundle;
 }
@@ -164,4 +168,54 @@ void set_gl_bridge_tbl() {
     br_swap_buffers = gl_swap_buffers;
     br_swap_interval = gl_swap_interval;
     br_terminate = gl_terminate;
+}
+
+// MetalCraft context and GL wrappers
+typedef unsigned int glimpl_enum;
+typedef unsigned int glimpl_uint;
+typedef int glimpl_sizei;
+typedef int glimpl_int;
+typedef char glimpl_char;
+
+void metalcraft_ensure_context_current(void) {
+    if (g_MainBundle && g_MainBundle->context) {
+        if (handle.eglGetCurrentContext() != g_MainBundle->context) {
+            handle.eglMakeCurrent(g_EglDisplay, g_MainBundle->surface, g_MainBundle->surface, g_MainBundle->context);
+        }
+    }
+}
+
+glimpl_uint glCreateShader(glimpl_enum type) {
+    metalcraft_ensure_context_current();
+    static glimpl_uint (*real_glCreateShader)(glimpl_enum) = NULL;
+    if (!real_glCreateShader) real_glCreateShader = dlsym(RTLD_NEXT, "glCreateShader");
+    return real_glCreateShader ? real_glCreateShader(type) : 0;
+}
+
+void glShaderSource(glimpl_uint shader, glimpl_sizei count, const glimpl_char **string, const glimpl_int *length) {
+    metalcraft_ensure_context_current();
+    static void (*real_glShaderSource)(glimpl_uint, glimpl_sizei, const glimpl_char **, const glimpl_int *) = NULL;
+    if (!real_glShaderSource) real_glShaderSource = dlsym(RTLD_NEXT, "glShaderSource");
+    if (real_glShaderSource) real_glShaderSource(shader, count, string, length);
+}
+
+void glCompileShader(glimpl_uint shader) {
+    metalcraft_ensure_context_current();
+    static void (*real_glCompileShader)(glimpl_uint) = NULL;
+    if (!real_glCompileShader) real_glCompileShader = dlsym(RTLD_NEXT, "glCompileShader");
+    if (real_glCompileShader) real_glCompileShader(shader);
+}
+
+void glLinkProgram(glimpl_uint program) {
+    metalcraft_ensure_context_current();
+    static void (*real_glLinkProgram)(glimpl_uint) = NULL;
+    if (!real_glLinkProgram) real_glLinkProgram = dlsym(RTLD_NEXT, "glLinkProgram");
+    if (real_glLinkProgram) real_glLinkProgram(program);
+}
+
+void glGetShaderiv(glimpl_uint shader, glimpl_enum pname, glimpl_int *params) {
+    metalcraft_ensure_context_current();
+    static void (*real_glGetShaderiv)(glimpl_uint, glimpl_enum, glimpl_int *) = NULL;
+    if (!real_glGetShaderiv) real_glGetShaderiv = dlsym(RTLD_NEXT, "glGetShaderiv");
+    if (real_glGetShaderiv) real_glGetShaderiv(shader, pname, params);
 }

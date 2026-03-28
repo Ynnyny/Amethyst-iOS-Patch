@@ -231,8 +231,22 @@ ShaderTranslationResult ShaderTranslator::translateToMSL(
     EnsureGlslangInitialized();
 
     const EShLanguage glslangStage = ToGlslangStage(stage);
-    const int sourceVersion = DetectVersion(glslSource);
-    const std::string normalizedSource = WithVersionHeader(glslSource, sourceVersion);
+    int sourceVersion = DetectVersion(glslSource);
+    std::string normalizedSource = WithVersionHeader(glslSource, sourceVersion);
+
+    if (sourceVersion == 150 || sourceVersion == 330) {
+        size_t pos = normalizedSource.find("#version 150");
+        if (pos != std::string::npos) {
+            normalizedSource.replace(pos, 12, "#version 300 es\n#define gl_VertexID gl_VertexID\n#define gl_InstanceID gl_InstanceID\n");
+        } else {
+            pos = normalizedSource.find("#version 330");
+            if (pos != std::string::npos) {
+                normalizedSource.replace(pos, 12, "#version 300 es\n#define gl_VertexID gl_VertexID\n#define gl_InstanceID gl_InstanceID\n");
+            }
+        }
+        sourceVersion = 300;
+    }
+
     const char* sourceStrings[] = {normalizedSource.c_str()};
 
     glslang::TShader shader(glslangStage);

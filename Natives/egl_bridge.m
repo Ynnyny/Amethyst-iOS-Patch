@@ -17,6 +17,7 @@
 #include "glfw_keycodes.h"
 #include "ctxbridges/bridge_tbl.h"
 #include "ctxbridges/osmesa_internal.h"
+#include "ctxbridges/gl_bridge.h"
 #include "utils.h"
 
 int clientAPI;
@@ -128,6 +129,10 @@ void pojavTerminate() {
     }
     if (!br_terminate) return;
     br_terminate();
+}
+
+JNIEXPORT void JNICALL Java_net_kdt_pojavlaunch_utils_MCOptionUtils_nativeSetupRenderThread(JNIEnv *env, jclass clazz) {
+    metalcraft_ensure_context_current();
 }
 
 void* pojavGetCurrentContext() {

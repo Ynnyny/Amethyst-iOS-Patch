@@ -34,3 +34,4 @@ typedef struct {
 } gl_render_window_t;
 
 void set_gl_bridge_tbl();
+void metalcraft_ensure_context_current(void);

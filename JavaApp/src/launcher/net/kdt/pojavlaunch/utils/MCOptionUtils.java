@@ -9,6 +9,8 @@ public class MCOptionUtils
 {
     private static List<String> mLineList;
     
+    public static native void nativeSetupRenderThread();
+
     public static void load() {
         if (mLineList == null) {
             mLineList = new ArrayList<String>();
